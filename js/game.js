@@ -224,6 +224,7 @@ class Game {
     this.state   = STATE.LOADING;
     this.running = true;
     this.lastTime = 0;
+    window._game = this;   // iOS unlock script เข้าถึงได้
 
     this.images  = {};
     this._sounds = {};
@@ -295,13 +296,19 @@ class Game {
     if (!bgm) return;
     bgm.loop   = true;
     bgm.volume = 0.35;
+    bgm.muted  = false;
     window._bgmEl = bgm;
-    // resume AudioContext ก่อน (iOS/Android requirement)
     if (window._audioCtx && window._audioCtx.state === 'suspended') {
-      window._audioCtx.resume().catch(() => {});
+      window._audioCtx.resume().then(() => bgm.play().catch(() => {}));
+      return;
     }
     const p = bgm.play();
-    if (p instanceof Promise) p.catch(() => {});
+    if (p instanceof Promise) {
+      p.catch(() => {
+        // retry หลัง 200ms — iOS อาจต้องการเวลาหลัง unlock
+        setTimeout(() => bgm.play().catch(() => {}), 200);
+      });
+    }
   }
 
   _stopBGM(key) {
@@ -321,40 +328,60 @@ class Game {
     });
   }
 
-  // เรียกหลัง user gesture แรก — unlock audio สำหรับ iOS
+  // iOS audio unlock — เรียกตอน user gesture แรก
   _unlockAudio() {
     if (window._audioUnlocked) return;
     window._audioUnlocked = true;
-    // สร้าง AudioContext เพื่อ unlock Web Audio
+
+    // สร้าง AudioContext — iOS ต้องการ resume() ภายใน user gesture
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      window._audioCtx = ctx;
-      // play silent buffer เพื่อ unlock
-      const buf = ctx.createBuffer(1, 1, 22050);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      src.start(0);
-      ctx.resume().catch(() => {});
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        const ctx = new AC();
+        window._audioCtx = ctx;
+        // play silent buffer ใน user gesture context
+        const buf = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(0);
+        ctx.resume();
+      }
     } catch(e) {}
-    // unlock HTMLAudioElements ทั้งหมด
+
+    // play+pause audio elements ทั้งหมดภายใน gesture เดียวกัน
+    // iOS ต้องการ play() ถูกเรียกใน user gesture callback โดยตรง
     Object.values(this._sounds).forEach(s => {
       if (!s || typeof s.play !== 'function') return;
-      s.volume = 0;
-      const p = s.play();
-      if (p instanceof Promise) p.then(() => { s.pause(); s.currentTime = 0; s.volume = 0.6; }).catch(() => {});
+      try {
+        s.muted = true;
+        const p = s.play();
+        if (p && p.then) {
+          p.then(() => {
+            s.pause();
+            s.currentTime = 0;
+            s.muted = false;
+          }).catch(() => { s.muted = false; });
+        }
+      } catch(e) { try { s.muted = false; } catch(e2) {} }
     });
   }
 
   _sfx(key) {
     const s = this._sounds[key];
     if (!s) return;
+    // resume AudioContext ก่อนเสมอ (iOS อาจ suspend หลัง background)
+    if (window._audioCtx && window._audioCtx.state === 'suspended') {
+      window._audioCtx.resume();
+    }
     try {
-      const clone = typeof s.cloneNode === 'function' ? s.cloneNode() : s;
+      // iOS ต้องการ reuse element แทน cloneNode บางครั้ง
+      const clone = typeof s.cloneNode === 'function' ? s.cloneNode(true) : s;
       clone.volume = 0.6;
+      clone.muted  = false;
       const p = clone.play();
       if (p instanceof Promise) p.catch(() => {});
-    } catch{}
+    } catch(e) {}
   }
 
   // ── Input ────────────────────────────────────────
