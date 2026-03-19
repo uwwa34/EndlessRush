@@ -77,12 +77,36 @@
 <body>
 
 <script>
+// iOS Audio Unlock — ต้องลงทะเบียนก่อน user gesture แรก
 (function(){
-  var evs=['touchstart','touchend','pointerdown','mousedown','click','keydown'];
+  var unlocked = false;
+  function unlock() {
+    if (unlocked) return;
+    unlocked = true;
+    // unlock AudioContext
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        var ctx = new AC();
+        window._audioCtx = ctx;
+        var buf = ctx.createBuffer(1,1,22050);
+        var src = ctx.createBufferSource();
+        src.buffer = buf; src.connect(ctx.destination); src.start(0);
+        ctx.resume();
+      }
+    } catch(e) {}
+    // ถ้า game มี sounds ให้ unlock ด้วย
+    if (window._game && window._game._unlockAudio) {
+      window._game._unlockAudio();
+    }
+    // resume BGM ถ้าหยุดอยู่
+    if (window._bgmEl && window._bgmEl.paused) {
+      window._bgmEl.play().catch(function(){});
+    }
+  }
+  var evs = ['touchstart','touchend','pointerdown','mousedown','click','keydown'];
   evs.forEach(function(ev){
-    document.addEventListener(ev,function(){
-      if(window._bgmEl&&window._bgmEl.paused) window._bgmEl.play().catch(function(){});
-    },{passive:true});
+    document.addEventListener(ev, unlock, {passive:true, once:false});
   });
 })();
 </script>
@@ -136,11 +160,13 @@ function loadImg(src){
 }
 function loadSnd(src){
   return new Promise(function(res){
-    var a=new Audio(),done=false;
-    function fin(){if(done)return;done=true;res(a.readyState>=2?a:null);}
-    a.oncanplaythrough=fin; a.onerror=fin;
-    a.preload='auto'; a.src=src;
-    setTimeout(fin,500);
+    // iOS ไม่ fire canplaythrough ก่อน user gesture
+    // แค่สร้าง Audio element ไว้ก่อน แล้ว unlock ทีหลังตอน tap
+    var a = new Audio();
+    a.preload = 'auto';
+    a.src = src;
+    // resolve ทันที ไม่รอ — iOS จะโหลดจริงหลัง unlock
+    setTimeout(function(){ res(a); }, 100);
   });
 }
 
