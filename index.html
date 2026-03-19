@@ -81,32 +81,33 @@
 (function(){
   var unlocked = false;
   function unlock() {
-    if (unlocked) return;
-    unlocked = true;
-    // unlock AudioContext
-    try {
-      var AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) {
-        var ctx = new AC();
-        window._audioCtx = ctx;
-        var buf = ctx.createBuffer(1,1,22050);
-        var src = ctx.createBufferSource();
-        src.buffer = buf; src.connect(ctx.destination); src.start(0);
-        ctx.resume();
+    // ไม่ทำอะไรถ้า page ไม่ active
+    if (document.hidden) return;
+    if (!unlocked) {
+      unlocked = true;
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) {
+          var ctx = new AC();
+          window._audioCtx = ctx;
+          var buf = ctx.createBuffer(1,1,22050);
+          var src = ctx.createBufferSource();
+          src.buffer = buf; src.connect(ctx.destination); src.start(0);
+          ctx.resume();
+        }
+      } catch(e) {}
+      if (window._game && window._game._unlockAudio) {
+        window._game._unlockAudio();
       }
-    } catch(e) {}
-    // ถ้า game มี sounds ให้ unlock ด้วย
-    if (window._game && window._game._unlockAudio) {
-      window._game._unlockAudio();
     }
-    // resume BGM ถ้าหยุดอยู่
-    if (window._bgmEl && window._bgmEl.paused) {
+    // resume BGM เฉพาะตอน page visible เท่านั้น
+    if (!document.hidden && window._bgmEl && window._bgmEl.paused) {
       window._bgmEl.play().catch(function(){});
     }
   }
   var evs = ['touchstart','touchend','pointerdown','mousedown','click','keydown'];
   evs.forEach(function(ev){
-    document.addEventListener(ev, unlock, {passive:true, once:false});
+    document.addEventListener(ev, unlock, {passive:true});
   });
 })();
 </script>
