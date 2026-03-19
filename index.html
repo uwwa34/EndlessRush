@@ -159,16 +159,27 @@ function loadImg(src){
     i.src=src;
   });
 }
-function loadSnd(src){
-  return new Promise(function(res){
-    // iOS ไม่ fire canplaythrough ก่อน user gesture
-    // แค่สร้าง Audio element ไว้ก่อน แล้ว unlock ทีหลังตอน tap
-    var a = new Audio();
-    a.preload = 'auto';
-    a.src = src;
-    // resolve ทันที ไม่รอ — iOS จะโหลดจริงหลัง unlock
-    setTimeout(function(){ res(a); }, 100);
-  });
+function loadSnd(src, isBGM){
+  if (isBGM) {
+    // BGM ใช้ Audio element (loop ได้ง่าย)
+    return new Promise(function(res){
+      var a = new Audio();
+      a.preload = 'auto';
+      a.src = src;
+      setTimeout(function(){ res(a); }, 100);
+    });
+  }
+  // SFX ใช้ fetch → ArrayBuffer → decode ผ่าน Web Audio API
+  // reliable กว่า cloneNode บน iOS มาก
+  return fetch(src)
+    .then(function(r){ return r.arrayBuffer(); })
+    .then(function(buf){
+      return { _sfxBuf: buf, _src: src };   // เก็บ buffer ไว้ decode ตอนเล่น
+    })
+    .catch(function(){
+      // fallback: Audio element ถ้า fetch ไม่ได้
+      var a = new Audio(); a.src = src; return a;
+    });
 }
 
 // ── Boot ───────────────────────────────────────────
@@ -193,10 +204,13 @@ function loadSnd(src){
       logo.textContent=''; logo.appendChild(el);
     }
 
-    // โหลดเสียง
+    // โหลดเสียง — BGM ใช้ Audio element, SFX ใช้ Web Audio Buffer
     setBar(50,'โหลดเสียง...');
     var skeys=Object.keys(ASSET_SOUNDS);
-    var sres=await Promise.all(skeys.map(function(k){return loadSnd(ASSET_SOUNDS[k]);}));
+    var bgmKeys = ['bgm','boss'];   // BGM files
+    var sres=await Promise.all(skeys.map(function(k){
+      return loadSnd(ASSET_SOUNDS[k], bgmKeys.indexOf(k) >= 0);
+    }));
     var sounds={};
     skeys.forEach(function(k,i){if(sres[i])sounds[k]=sres[i];});
 
