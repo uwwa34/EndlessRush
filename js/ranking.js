@@ -14,7 +14,7 @@ class RankingSystem {
   static addScore(name, score, details) {
     const list = RankingSystem.load();
     list.push({
-      name   : (name||'PLAYER').trim().slice(0,10).toUpperCase(),
+      name   : (name||'RUNNER').trim().slice(0,10).toUpperCase(),
       score,
       dist   : Math.floor(details.distanceM || 0),
       bosses : details.bosses || 0,
@@ -255,12 +255,13 @@ class RankingScreen {
 
   _handleKey(e) {
     if (this.mode === 'entry') {
-      if (e.key === 'Enter' || e.key === ' ') { this._confirmName(); return; }
+      if (e.key === 'Enter') { this._confirmName(); return; }
       if (e.key === 'Backspace') { this.playerName = this.playerName.slice(0,-1); return; }
       if (e.key.length === 1 && e.key !== ' ' && this.playerName.length < 10)
         this.playerName += e.key.toUpperCase();
     } else {
-      if (e.key === 'Enter' || e.key === ' ' || e.key === 'a' || e.key === 'A') this._playAgain();
+      // board mode — Enter เท่านั้น
+      if (e.key === 'Enter') this._playAgain();
     }
   }
 
@@ -300,7 +301,7 @@ class RankingScreen {
   }
 
   _confirmName() {
-    const name   = this.playerName.trim() || 'PLAYER';
+    const name   = this.playerName.trim() || 'RUNNER';
     this.ranking = RankingSystem.addScore(name, this.playerScore, this._details);
     const idx    = this.ranking.findIndex(
       e => e.name === name.toUpperCase() && e.score === this.playerScore
@@ -406,7 +407,7 @@ class RankingScreen {
     // hint
     // ctx.fillStyle    = COL.MID;
     // ctx.font         = `12px ${FONT.BODY}`;
-    // ctx.fillText('ไม่พิมพ์ชื่อก็กดยืนยันได้เลย (ชื่อ: PLAYER)', WIDTH/2, 514);
+    // ctx.fillText('กด Enter เพื่อยืนยัน (ไม่ใส่ชื่อ = RUNNER)', WIDTH/2, 514);
   }
 
   _drawVKB(ctx) {

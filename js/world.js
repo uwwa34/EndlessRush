@@ -96,7 +96,7 @@ class PlatformManager {
         player.diving         = false;
         player._jumpCut       = false;
         player._jumpHeldMs    = 0;
-        player._hasDoubleJump = true;
+        // _hasDoubleJump จะ reset ตอน _tryJump() เท่านั้น
       }
     }
 
@@ -121,13 +121,17 @@ class PlatformManager {
     // ── Player enters pit zone → start falling ────
     let overPit = false;
     for (const h of this.pits) {
-      // เช็ค overlap แทน center point — ป้องกัน player หลุดออกจาก pit zone
-      const pl = player.x + player.w * 0.2;   // 20% จากซ้าย
-      const pr = player.x + player.w * 0.8;   // 80% จากซ้าย
-      const inPit = pr > h.x && pl < h.x + h.w;
+      // ใช้ center x เป็นหลัก แต่ถ้า right edge ข้ามเข้าเหวเกิน 30% ของ width ก็ถือว่า overPit
+      const cx  = player.x + player.w * 0.5;
+      const pr  = player.x + player.w * 0.7;   // 70% จากซ้าย
+      const inPit = cx > h.x && cx < h.x + h.w  // center อยู่ในเหว
+                 || pr > h.x && cx < h.x + h.w;  // หรือ right edge เข้าเหวแล้ว center ยังอยู่ซ้าย
       if (inPit) {
         overPit = true;
-        if (player.onGround) player.onGround = false;
+        if (player.onGround) {
+          player.onGround       = false;
+          player._hasDoubleJump = true;   // เดินตกเหว → คืน double jump
+        }
         break;
       }
     }
@@ -238,7 +242,7 @@ class World {
     const dx  = spd * dt;
     this.scrollX   += dx;
     this.distanceM  = this.scrollX / 10;
-    this._bgX      += dx * 0.3;   // bg scrolls slower (parallax)
+    this._bgX      += dx * 0.07;   // bg scrolls slower (parallax)
     for (let i = 0; i < 3; i++) this._layerOffsets[i] += dx * BG_LAYERS[i].speedFactor;
     this.platforms.update(dt, spd, this.distanceM);
   }

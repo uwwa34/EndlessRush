@@ -64,8 +64,10 @@ class Player {
   // ── Actions ─────────────────────────────────────
 
   // เรียกทุก frame ที่ปุ่ม A ถูกกดค้าง (isHeld = true) หรือปล่อย (false)
-  setJumpHeld(isHeld) {
-    if (isHeld && !this._jumpHeld) {
+  setJumpHeld(isHeld, forceEdge = false) {
+    const justPressed = (isHeld && !this._jumpHeld) || forceEdge;
+
+    if (justPressed) {
       if (this.onGround) {
         this._tryJump();
       } else if (this._hasDoubleJump) {
@@ -88,12 +90,13 @@ class Player {
     if (this.dead) return;
     if (this.sliding) this._endSlide();
     if (this.onGround) {
-      this.vy           = JUMP_VEL;
-      this.onGround     = false;
-      this.jumping      = true;
-      this.diving       = false;
-      this._jumpCut     = false;
-      this._jumpHeldMs  = 0;
+      this.vy             = JUMP_VEL;
+      this.onGround       = false;
+      this.jumping        = true;
+      this.diving         = false;
+      this._jumpCut       = false;
+      this._jumpHeldMs    = 0;
+      this._hasDoubleJump = true;   // reset ให้ใช้ได้ 1 ครั้งต่อการบิน
     }
   }
 
@@ -218,14 +221,13 @@ class Player {
     if (!this.onGround) {
       this.vy += GRAVITY * dt;
       this.y  += this.vy * dt;
-      // clamp ที่ GROUND_Y เฉพาะตอนไม่อยู่เหนือเหว
       if (!overPit) {
         const groundY = GROUND_Y - this.h;
         if (this.y >= groundY) {
           this.y = groundY; this.vy = 0;
           this.onGround = true; this.jumping = false;
           this.diving = false; this._jumpCut = false; this._jumpHeldMs = 0;
-          this._hasDoubleJump = true;   // คืน double jump เมื่อแตะพื้น
+          // ไม่ reset _hasDoubleJump ที่นี่ — reset ตอน _tryJump() แทน
         }
       }
     }
@@ -341,9 +343,15 @@ class Player {
         ctx.drawImage(this.sprite, -this.w/2, -this.h/2, this.w, this.h);
         ctx.restore();
       } else {
-        // run: bob เล็กน้อย
-        const bob = Math.sin(Date.now() / 140) * 2;
-        ctx.drawImage(this.sprite, x, y + bob, this.w, this.h);
+        // run cycle: เอียงไปข้างหน้า → ตั้งตรง → เอียงข้างหลัง → ตั้งตรง
+        const t     = Date.now() / 70; //120
+        const angle = Math.abs(Math.sin(t)) * 0.18; // เอียงหน้า → ตั้งตรง วนซ้ำ
+        const bob   = Math.abs(Math.sin(t)) * -3;
+        ctx.save();
+        ctx.translate(x + this.w/2, y + this.h + bob);
+        ctx.rotate(angle);
+        ctx.drawImage(this.sprite, -this.w/2, -this.h, this.w, this.h);
+        ctx.restore();
       }
     } else {
       this._drawEmoji(ctx, x, y, this.w, this.h);
@@ -380,8 +388,14 @@ class Player {
       ctx.fillText(emoji, -w/2, -h/2);
       ctx.restore();
     } else {
-      const bob = Math.sin(Date.now() / 140) * 2;
-      ctx.fillText(emoji, x, y + bob);
+      const t     = Date.now() / 120;
+      const angle = Math.abs(Math.sin(t)) * 0.18;
+      const bob   = Math.abs(Math.sin(t)) * -3;
+      ctx.save();
+      ctx.translate(x + w/2, y + h + bob);
+      ctx.rotate(angle);
+      ctx.fillText(emoji, -w/2, -h);
+      ctx.restore();
     }
   }
 

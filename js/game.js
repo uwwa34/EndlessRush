@@ -55,6 +55,7 @@ class VirtualJoypad {
     this._btnBounds  = {};
     this._gameState  = null;
     this._slideEdge  = false;
+    this._jumpEdge   = false;
     this._bindTouch(canvas);
     this._bindKeys();
   }
@@ -73,6 +74,7 @@ class VirtualJoypad {
       if (!this._isGameActive()) return;
       // A button = Jump: Space หรือ X หรือ ArrowUp
       if (e.key === ' ' || e.key === 'x' || e.key === 'X' || e.key === 'ArrowUp') {
+        if (!this._pressed[BTN.JUMP]) this._jumpEdge = true;
         this._pressed[BTN.JUMP] = true;
       }
       // B button = Fire: Z หรือ ArrowDown
@@ -136,6 +138,7 @@ class VirtualJoypad {
     const jl = this._btnBounds.JUMP;
     const jr = this._btnBounds.SLIDE;
     if (jl && x>=jl.x && x<=jl.x+jl.w && y>=jl.y && y<=jl.y+jl.h) {
+      this._jumpEdge = true;          // set edge ทุกครั้งที่แตะ ไม่ว่าจะกดค้างอยู่แล้วหรือเปล่า
       this._pressed[BTN.JUMP] = id;
     } else if (jr && x>=jr.x && x<=jr.x+jr.w && y>=jr.y && y<=jr.y+jr.h) {
       if (!this._pressed[BTN.SLIDE]) this._slideEdge = true;
@@ -152,6 +155,7 @@ class VirtualJoypad {
   }
 
   isJumpHeld()   { return !!this._pressed[BTN.JUMP]; }
+  consumeJump()  { if (this._jumpEdge) { this._jumpEdge = false; return true; } return false; }
   consumeSlide() { if (this._slideEdge) { this._slideEdge = false; return true; } return false; }
 
   setButtonBounds(jumpBounds, slideBounds) {
@@ -161,10 +165,10 @@ class VirtualJoypad {
 
   // ── Draw buttons ─────────────────────────────────
   draw(ctx) {
-    const by  = HEIGHT - 68;
-    const bw  = 62, bh = 56, br = 14;
-    const bx  = 14;
-    const ax  = WIDTH - bw - 14;
+    const bw  = 80, bh = 70, br = 18;   // ขนาดใหญ่ขึ้น
+    const by  = HEIGHT - 90;             // ขยับขึ้นจากล่าง
+    const bx  = 20;
+    const ax  = WIDTH - bw - 20;
 
     this.setButtonBounds(
       { x:ax, y:by, w:bw, h:bh },
@@ -174,7 +178,7 @@ class VirtualJoypad {
     // ── Joypad background strip (คนละสีกับพื้น) ──
     ctx.fillStyle = COL.JOYPAD_BG;
     ctx.beginPath();
-    ctx.roundRect(0, by - 14, WIDTH, bh + 22, [12, 12, 0, 0]);
+    ctx.roundRect(0, by - 16, WIDTH, bh + 28, [14, 14, 0, 0]);
     ctx.fill();
 
     const drawBtn = (x, top, bottom, active, accentOn, accentOff) => {
@@ -282,20 +286,22 @@ class Game {
   }
   setSounds(snds) {
     this._sounds = snds;
-    this._playBGM('bgm');
+    // ไม่เล่น BGM ทันที — รอ user gesture (iOS requirement)
+    // BGM จะเล่นตอน _startGame() หรือ intro เสมอหลัง tap
   }
 
   _playBGM(key) {
     const bgm = this._sounds[key];
     if (!bgm) return;
     bgm.loop   = true;
-    bgm.volume = 0.4;
+    bgm.volume = 0.35;
     window._bgmEl = bgm;
+    // resume AudioContext ก่อน (iOS/Android requirement)
+    if (window._audioCtx && window._audioCtx.state === 'suspended') {
+      window._audioCtx.resume().catch(() => {});
+    }
     const p = bgm.play();
-    if (p instanceof Promise) p.catch(() => {
-      const ev = () => { bgm.play().catch(()=>{}); document.removeEventListener('pointerdown', ev); };
-      document.addEventListener('pointerdown', ev);
-    });
+    if (p instanceof Promise) p.catch(() => {});
   }
 
   _stopBGM(key) {
@@ -309,12 +315,34 @@ class Game {
       if (!bgm) return;
       if (document.hidden) {
         bgm.pause();
-      } else {
-        // กลับมา — เล่น BGM เฉพาะตอนกำลังเล่น
-        if (this.state === STATE.PLAYING || this.state === STATE.INTRO) {
-          bgm.play().catch(() => {});
-        }
+      } else if (this.state === STATE.PLAYING || this.state === STATE.INTRO) {
+        bgm.play().catch(() => {});
       }
+    });
+  }
+
+  // เรียกหลัง user gesture แรก — unlock audio สำหรับ iOS
+  _unlockAudio() {
+    if (window._audioUnlocked) return;
+    window._audioUnlocked = true;
+    // สร้าง AudioContext เพื่อ unlock Web Audio
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      window._audioCtx = ctx;
+      // play silent buffer เพื่อ unlock
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.resume().catch(() => {});
+    } catch(e) {}
+    // unlock HTMLAudioElements ทั้งหมด
+    Object.values(this._sounds).forEach(s => {
+      if (!s || typeof s.play !== 'function') return;
+      s.volume = 0;
+      const p = s.play();
+      if (p instanceof Promise) p.then(() => { s.pause(); s.currentTime = 0; s.volume = 0.6; }).catch(() => {});
     });
   }
 
@@ -322,15 +350,21 @@ class Game {
     const s = this._sounds[key];
     if (!s) return;
     try {
-      const clone = typeof s.cloneNode==='function' ? s.cloneNode() : s;
+      const clone = typeof s.cloneNode === 'function' ? s.cloneNode() : s;
       clone.volume = 0.6;
-      clone.play().catch(()=>{});
+      const p = clone.play();
+      if (p instanceof Promise) p.catch(() => {});
     } catch{}
   }
 
   // ── Input ────────────────────────────────────────
   _bindKeys() {
     window.addEventListener('keydown', e => {
+      // NAME state: Enter เท่านั้น — Space ไม่ทำอะไร
+      if (this.state === STATE.NAME) {
+        // ให้ ranking.js _handleKey จัดการเอง (ลงทะเบียนไว้แล้ว)
+        return;
+      }
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
         this._onSpaceEnter();
@@ -384,7 +418,9 @@ class Game {
   }
 
   _onTap(x, y) {
-    // ── UI screens get priority ───────────────────
+    // unlock audio on first interaction (iOS)
+    this._unlockAudio();
+
     if (this.state === STATE.INTRO) {
       if (this._introPhase >= 3) this._startGame();
       return;
@@ -423,8 +459,6 @@ class Game {
 
     // prevent dt spike on first loop after state change
     this.lastTime = performance.now();
-
-    // restart BGM
     this._playBGM('bgm');
   }
 
@@ -711,10 +745,20 @@ class Game {
       this.world.bossAlpha = Math.max(0, this.world.bossAlpha - dt * 2);
     }
 
-    // ── A: Jump (variable held) ───────────────────
-    this.player.setJumpHeld(this.joypad.isJumpHeld());
+    // update world
+    this.world.update(dt, 1);
 
-    // ── B: Fire Projectile (weapon charge ready) ──
+    // ── resolve pit/platform ก่อนรับ input ─────────
+    // สำคัญ: ต้อง resolvePlayer ก่อน setJumpHeld
+    // เพื่อให้ _hasDoubleJump ถูก reset ตอนเดินตกเหว
+    // ก่อนที่ jump input จะถูกประมวลผล
+    const { result: platResult, overPit } = this.world.platforms.resolvePlayer(this.player);
+
+    // ── A: Jump — forceEdge จาก touch tap, held สำหรับ variable height
+    const jumpEdge = this.joypad.consumeJump();
+    this.player.setJumpHeld(this.joypad.isJumpHeld(), jumpEdge);
+
+    // ── B: Fire Projectile ────────────────────────
     if (this.joypad.consumeSlide()) {
       if (this.player.weaponReady && this.player.fireProjectile()) {
         this._sfx('dash');
@@ -722,12 +766,7 @@ class Game {
       }
     }
 
-    // update world + player
-    this.world.update(dt, 1);
-
-    // ── เช็ค pit ก่อน update player ──────────────
-    const { result: platResult, overPit } = this.world.platforms.resolvePlayer(this.player);
-    this.player.update(dt, overPit);   // ส่ง overPit เพื่อไม่ clamp ที่ GROUND_Y
+    this.player.update(dt, overPit);
 
     if (platResult === 'pit') {
       this.player.hp   = 0;
