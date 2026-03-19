@@ -333,49 +333,87 @@ class Game {
     if (window._audioUnlocked) return;
     window._audioUnlocked = true;
 
-    // สร้าง AudioContext — iOS ต้องการ resume() ภายใน user gesture
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) {
         const ctx = new AC();
         window._audioCtx = ctx;
-        // play silent buffer ใน user gesture context
         const buf = ctx.createBuffer(1, 1, 22050);
         const src = ctx.createBufferSource();
         src.buffer = buf;
         src.connect(ctx.destination);
         src.start(0);
-        ctx.resume();
+        ctx.resume().then(() => {
+          // pre-decode SFX ทั้งหมดหลัง context ready
+          this._predecodeSFX(ctx);
+        });
       }
     } catch(e) {}
 
-    // play+pause audio elements ทั้งหมดภายใน gesture เดียวกัน
-    // iOS ต้องการ play() ถูกเรียกใน user gesture callback โดยตรง
+    // play+pause audio elements (BGM unlock)
     Object.values(this._sounds).forEach(s => {
       if (!s || typeof s.play !== 'function') return;
       try {
         s.muted = true;
         const p = s.play();
         if (p && p.then) {
-          p.then(() => {
-            s.pause();
-            s.currentTime = 0;
-            s.muted = false;
-          }).catch(() => { s.muted = false; });
+          p.then(() => { s.pause(); s.currentTime = 0; s.muted = false; })
+           .catch(() => { s.muted = false; });
         }
       } catch(e) { try { s.muted = false; } catch(e2) {} }
+    });
+  }
+
+  _predecodeSFX(ctx) {
+    Object.entries(this._sounds).forEach(([key, s]) => {
+      if (!s || !s._sfxBuf) return;
+      ctx.decodeAudioData(s._sfxBuf, (decoded) => {
+        s._audioBuf = decoded;
+        delete s._sfxBuf;
+      }, () => {});
     });
   }
 
   _sfx(key) {
     const s = this._sounds[key];
     if (!s) return;
-    // resume AudioContext ก่อนเสมอ (iOS อาจ suspend หลัง background)
+
+    // Web Audio API path — ใช้ decoded AudioBuffer (decode ครั้งแรกแล้วเก็บไว้)
+    if (s._sfxBuf || s._audioBuf) {
+      const ctx = window._audioCtx;
+      if (!ctx) return;
+      if (ctx.state === 'suspended') { ctx.resume(); return; }
+
+      const play = (buf) => {
+        try {
+          const src  = ctx.createBufferSource();
+          const gain = ctx.createGain();
+          gain.gain.value = 0.6;
+          src.buffer = buf;
+          src.connect(gain);
+          gain.connect(ctx.destination);
+          src.start(0);
+        } catch(e) {}
+      };
+
+      if (s._audioBuf) {
+        play(s._audioBuf);
+      } else {
+        // decode ครั้งแรก แล้วเก็บ cache
+        ctx.decodeAudioData(s._sfxBuf, (decoded) => {
+          s._audioBuf = decoded;
+          delete s._sfxBuf;
+          play(decoded);
+        }, () => {});
+      }
+      return;
+    }
+
+    // Audio element fallback
     if (window._audioCtx && window._audioCtx.state === 'suspended') {
       window._audioCtx.resume();
     }
     try {
-      // iOS ต้องการ reuse element แทน cloneNode บางครั้ง
       const clone = typeof s.cloneNode === 'function' ? s.cloneNode(true) : s;
       clone.volume = 0.6;
       clone.muted  = false;
