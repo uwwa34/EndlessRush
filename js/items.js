@@ -79,12 +79,23 @@ class Item {
       ctx.lineWidth   = 2.5;
       ctx.stroke();
       ctx.restore();
-      ctx.globalAlpha = glow;
-      ctx.font        = `${this.w * 1.1}px serif`;
-      ctx.textBaseline = 'top';
-      ctx.textAlign    = 'left';
-      ctx.fillText(this.emoji, this.x, this.y + bob);
-      ctx.globalAlpha = 1;
+
+      // ใช้ sprite ถ้ามี
+      const puDef = this._powerupKey
+        ? Object.values(POWERUP_TYPES).find(p => p.key === this._powerupKey)
+        : null;
+      if (puDef && puDef.sprite) {
+        ctx.globalAlpha = glow;
+        ctx.drawImage(puDef.sprite, this.x, this.y + bob, this.w, this.h);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.globalAlpha  = glow;
+        ctx.font         = `${this.w * 1.1}px serif`;
+        ctx.textBaseline = 'top';
+        ctx.textAlign    = 'left';
+        ctx.fillText(this.emoji, this.x, this.y + bob);
+        ctx.globalAlpha  = 1;
+      }
       return;
     }
 

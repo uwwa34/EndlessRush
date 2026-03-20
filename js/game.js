@@ -285,6 +285,13 @@ class Game {
     for (const [k, t] of Object.entries(itemMap)) {
       if (imgs[k] && ITEM_TYPES[t]) ITEM_TYPES[t].sprite = imgs[k];
     }
+
+    // powerup ทุกอันใช้รูปเดียวกัน power_up.png
+    if (imgs.power_up) {
+      for (const def of Object.values(POWERUP_TYPES)) {
+        def.sprite = imgs.power_up;
+      }
+    }
   }
   setSounds(snds) {
     this._sounds = snds;
