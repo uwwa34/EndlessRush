@@ -190,7 +190,7 @@ class Player {
   }
 
   // ── Update ──────────────────────────────────────
-  update(dt, overPit = false) {
+  update(dt) {
     if (this.dead) return;
 
     // slide timer
@@ -221,14 +221,11 @@ class Player {
     if (!this.onGround) {
       this.vy += GRAVITY * dt;
       this.y  += this.vy * dt;
-      if (!overPit) {
-        const groundY = GROUND_Y - this.h;
-        if (this.y >= groundY) {
-          this.y = groundY; this.vy = 0;
-          this.onGround = true; this.jumping = false;
-          this.diving = false; this._jumpCut = false; this._jumpHeldMs = 0;
-          // ไม่ reset _hasDoubleJump ที่นี่ — reset ตอน _tryJump() แทน
-        }
+      const groundY = GROUND_Y - this.h;
+      if (this.y >= groundY) {
+        this.y = groundY; this.vy = 0;
+        this.onGround = true; this.jumping = false;
+        this.diving = false; this._jumpCut = false; this._jumpHeldMs = 0;
       }
     }
 
@@ -344,7 +341,7 @@ class Player {
         ctx.restore();
       } else {
         // run cycle: เอียงไปข้างหน้า → ตั้งตรง → เอียงข้างหลัง → ตั้งตรง
-        const t     = Date.now() / 70; //120
+        const t     = Date.now() / 120;
         const angle = Math.abs(Math.sin(t)) * 0.18; // เอียงหน้า → ตั้งตรง วนซ้ำ
         const bob   = Math.abs(Math.sin(t)) * -3;
         ctx.save();

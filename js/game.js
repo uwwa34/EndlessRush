@@ -813,13 +813,10 @@ class Game {
     // update world
     this.world.update(dt, 1);
 
-    // ── resolve pit/platform ก่อนรับ input ─────────
-    // สำคัญ: ต้อง resolvePlayer ก่อน setJumpHeld
-    // เพื่อให้ _hasDoubleJump ถูก reset ตอนเดินตกเหว
-    // ก่อนที่ jump input จะถูกประมวลผล
-    const { result: platResult, overPit } = this.world.platforms.resolvePlayer(this.player);
+    // ── resolve platform collision ─────────────────
+    this.world.platforms.resolvePlayer(this.player);
 
-    // ── A: Jump — forceEdge จาก touch tap, held สำหรับ variable height
+    // ── A: Jump ──────────────────────────────────
     const jumpEdge = this.joypad.consumeJump();
     this.player.setJumpHeld(this.joypad.isJumpHeld(), jumpEdge);
 
@@ -831,21 +828,9 @@ class Game {
       }
     }
 
-    this.player.update(dt, overPit);
-
-    if (platResult === 'pit') {
-      this.player.hp   = 0;
-      this.player.dead = true;
-      this._sfx('die');
-      this._playerDied();
-      return;
-    }
+    this.player.update(dt);
 
     this.enemies.update(dt, this.world.speed, this.world.distanceM);
-    // ข้อ 2: enemy ตกเหว
-    for (const e of this.enemies.enemies) {
-      this.world.platforms.checkEnemyPit(e);
-    }
     this.items.update(dt, this.world.speed, this.world.distanceM,
                       this.world.platforms.activePlatforms);
 
