@@ -233,6 +233,7 @@ class Game {
     this.world       = new World();
     this.player      = new Player();
     this.enemies     = new EnemyManager();
+    this.boulders    = new BoulderManager();
     this.items       = new ItemManager();
     this.boss        = new Boss();   // stub
     this.raid        = new BossRaid();
@@ -531,6 +532,7 @@ class Game {
     this.world.reset();
     this.player.reset();
     this.enemies.reset();
+    this.boulders.reset();
     this.items.reset();
     this.hud.reset();
     this._bossCount        = 0;
@@ -831,6 +833,33 @@ class Game {
     this.player.update(dt);
 
     this.enemies.update(dt, this.world.speed, this.world.distanceM);
+    this.boulders.update(dt, this.world.speed, this.world.distanceM);
+
+    // ── Boulder hit player ────────────────────────
+    if (!this.player.invincible) {
+      const hitBoulder = this.boulders.checkCollision(this.player);
+      if (hitBoulder) {
+        const died = this.player.hit();
+        this._sfx('hit');
+        this.hud.triggerShake(8);
+        this._comboCount = 0;
+        if (died) { this._playerDied(); return; }
+      }
+    }
+
+    // ── Projectile hits boulder ────────────────────
+    for (const proj of this._projectiles) {
+      if (!proj.alive) continue;
+      const hitB = this.boulders.checkProjectileHit(proj);
+      if (hitB) {
+        proj.alive = false;
+        const pts = 150;
+        this._killScore += pts;
+        this.hud.addScore(0, hitB.x, hitB.y - 20, `💥 +${pts}`);
+        this._spawnExplosion(hitB.x, hitB.y);
+        this._sfx('boss_hit');
+      }
+    }
     this.items.update(dt, this.world.speed, this.world.distanceM,
                       this.world.platforms.activePlatforms);
 
@@ -1100,6 +1129,7 @@ class Game {
     this.world.draw(ctx);
     this.items.draw(ctx);
     this.enemies.draw(ctx);
+    this.boulders.draw(ctx);
     for (const p of this._projectiles) p.draw(ctx);
     this.player.draw(ctx);
     this.raid.draw(ctx);   // boss raid โฉบผ่าน
