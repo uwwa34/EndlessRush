@@ -508,14 +508,19 @@ class Game {
 
   // ── State transitions ────────────────────────────
   _goIntro() {
-    // hide any overlays
     this.rankScreen.hide();
     this.tallyScreen.visible = false;
 
-    // reset boss state
     this.world.bossAlpha = 0;
     this.raid.state      = RAID_STATE.IDLE;
     this._projectiles    = [];
+
+    // reset powerup
+    if (this.player.activePowerup) this.player._endPowerup(this.player.activePowerup);
+    this.player.activePowerup = null;
+    this.player.powerupTimer  = 0;
+    this.player.w = PLAYER_W;
+    this.player.h = PLAYER_H;
 
     this.state          = STATE.INTRO;
     this._introPhase    = 0;
@@ -523,7 +528,6 @@ class Game {
     this._introPlayerX  = -80;
     this._introAlpha    = 0;
 
-    // prevent dt spike on first loop after state change
     this.lastTime = performance.now();
     this._playBGM('bgm');
   }
@@ -534,6 +538,10 @@ class Game {
     this.enemies.reset();
     this.boulders.reset();
     this.items.reset();
+    this.player.activePowerup = null;
+    this.player.powerupTimer  = 0;
+    this._rapidTimer          = 0;
+    this._lastSpeedMult       = 1;
     this.hud.reset();
     this._bossCount        = 0;
     this._nextRaidDist     = BOSS_RAID_MIN + Math.random() * (BOSS_RAID_MAX - BOSS_RAID_MIN);
@@ -600,6 +608,39 @@ class Game {
     });
   }
 
+  _drawPowerupHUD(ctx) {
+    const p = this.player;
+    if (!p.activePowerup || p.powerupTimer <= 0) return;
+    const def = Object.values(POWERUP_TYPES).find(d => d.key === p.activePowerup);
+    if (!def) return;
+
+    if (!def || def.duration <= 0) return;   // bomb = ทันที ไม่มี bar
+    const ratio  = Math.max(0, p.powerupTimer / def.duration);
+    const barW   = 140, barH = 10;
+    const barX   = WIDTH/2 - barW/2;
+    const barY   = 36;
+
+    // bg
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.roundRect(barX-1, barY-1, barW+2, barH+2, 6); ctx.fill();
+
+    // fill — gradient สีตาม powerup
+    const colors = {
+      speed_boost:'#64B5F6', magnet:'#CE93D8', freeze:'#80DEEA',
+      ghost:'#B0BEC5', fly:'#A5D6A7', rapid_fire:'#EF9A9A',
+      giant:'#FFD54F', bomb:'#FFAB91',
+    };
+    ctx.fillStyle = colors[p.activePowerup] || '#4CAF50';
+    ctx.beginPath(); ctx.roundRect(barX, barY, barW * ratio, barH, 5); ctx.fill();
+
+    // label
+    ctx.fillStyle    = '#fff';
+    ctx.font         = `bold 11px ${FONT.MAIN}`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`${def.emoji} ${def.label}`, WIDTH/2, barY - 2);
+  }
+
   _spawnRaidPlatform() {
     // Platform spawn ตอนเริ่ม WARNING phase
     // Boss มาถึงหลัง _warningDur ms → platform ต้อง scroll เข้ามาพอดี
@@ -630,6 +671,36 @@ class Game {
     // ชั้น 3: 320px เหนือพื้น — กระโดดจากชั้น 2 ได้ (diff=90px)
     // ยืนบน ชั้น 3 แล้วอยู่เหนือ boss ที่บินมาระดับต่ำสุด
     plats.push({ x: spawn3X, y: GROUND_Y - 320, w: 140, h: 20, level: 3, _coinsSpawned: true });
+  }
+
+  _activatePowerup(key, x, y) {
+    const def = Object.values(POWERUP_TYPES).find(p => p.key === key);
+    if (!def) return;
+    this._sfx('start');
+    this.hud.addScore(0, x, y - 20, `${def.emoji} ${def.label}!`);
+
+    if (key === 'bomb') {
+      // ระเบิดทันที — ล้างทุกอย่างบนจอ
+      let pts = 0, killCount = 0;
+      for (const e of this.enemies.enemies) {
+        if (!e.alive) continue;
+        e.alive = false;
+        pts += e.points;
+        killCount++;
+        this._spawnExplosion(e.x + e.w/2, e.y + e.h/2);
+      }
+      for (const b of this.boulders.boulders) {
+        if (!b.alive) continue;
+        b.alive = false;
+        pts += 150;
+        this._spawnExplosion(b.x, b.y);
+      }
+      this._enemyKills += killCount;
+      this._killScore  += pts;
+      this._sfx('boss_clear');
+      return;
+    }
+    this.player.activatePowerup(key);
   }
 
   _spawnBossItem(type) {
@@ -780,7 +851,10 @@ class Game {
     }
 
     // boss body โฉบชน player
-    if (!this.player.invincible && this.raid.checkBodyHit(this.player)) {
+    const raidImmune = this.player.activePowerup === 'ghost' ||
+                       this.player.activePowerup === 'freeze' ||
+                       this.player.activePowerup === 'giant';
+    if (!this.player.invincible && !raidImmune && this.raid.checkBodyHit(this.player)) {
       const died = this.player.hit();
       this._sfx('hit');
       this.hud.triggerShake(8);
@@ -788,7 +862,7 @@ class Game {
     }
 
     // boss projectile โดน player
-    if (!this.player.invincible && this.raid.checkProjectileHit(this.player)) {
+    if (!this.player.invincible && !raidImmune && this.raid.checkProjectileHit(this.player)) {
       const died = this.player.hit();
       this._sfx('hit');
       this.hud.triggerShake(8);
@@ -812,8 +886,9 @@ class Game {
       this.world.bossAlpha = Math.max(0, this.world.bossAlpha - dt * 2);
     }
 
-    // update world
-    this.world.update(dt, 1);
+    // update world (speed_boost = ช้าลง 0.5x)
+    const wSpeedMult = this.player.activePowerup === 'speed_boost' ? 0.5 : 1;
+    this.world.update(dt, wSpeedMult);
 
     // ── resolve platform collision ─────────────────
     this.world.platforms.resolvePlayer(this.player);
@@ -832,11 +907,17 @@ class Game {
 
     this.player.update(dt);
 
-    this.enemies.update(dt, this.world.speed, this.world.distanceM);
-    this.boulders.update(dt, this.world.speed, this.world.distanceM);
+    const frozen = this.player.activePowerup === 'freeze';
+    if (!frozen) {
+      this.enemies.update(dt, this.world.speed, this.world.distanceM);
+      this.boulders.update(dt, this.world.speed, this.world.distanceM);
+    }
 
     // ── Boulder hit player ────────────────────────
-    if (!this.player.invincible) {
+    const _boulderImmune = this.player.activePowerup === 'ghost' ||
+                           this.player.activePowerup === 'freeze' ||
+                           this.player.activePowerup === 'giant';
+    if (!this.player.invincible && !_boulderImmune) {
       const hitBoulder = this.boulders.checkCollision(this.player);
       if (hitBoulder) {
         const died = this.player.hit();
@@ -906,7 +987,6 @@ class Game {
         this.hud.addScore(0, collected.x, collected.y - 10, `+${pts}`);
       }
       if (collected.typeKey === 'STAR') {
-        // ⭐ Star → Weapon Charge ทันที + pts
         this.player.weaponCharge = WEAPON_CHARGE_MS;
         this.player.weaponReady  = true;
         this.player.specialGauge = 5;
@@ -916,14 +996,73 @@ class Game {
       }
       if (collected.typeKey === 'HEART')  this.player.applyPowerup('heart');
       if (collected.typeKey === 'SHIELD') this.player.applyPowerup('shield');
+      if (collected.typeKey === 'POWERUP') {
+        this._activatePowerup(collected._powerupKey, collected.x, collected.y);
+      }
       this._comboCount++;
       this._comboTimer = 2000;
       if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
     }
 
-    // ── Enemy collision: Dash / Stomp / Hit ────────
+    // ── Magnet: ดูด item เข้าหา player ──────────
+    if (this.player.activePowerup === 'magnet') {
+      const px = this.player.x + this.player.w/2;
+      const py = this.player.y + this.player.h/2;
+      for (const item of this.items.items) {
+        if (!item.alive || item._isBossDrop) continue;
+        const ix = item.x + item.w/2, iy = item.y + item.h/2;
+        const dist = Math.hypot(px-ix, py-iy);
+        if (dist < 160) {
+          item.x += (px - ix) * dt * 5;
+          item.y += (py - iy) * dt * 5;
+        }
+      }
+    }
+
+    // ── Rapid Fire: ยิงอัตโนมัติ ─────────────────
+    if (this.player.activePowerup === 'rapid_fire') {
+      this._rapidTimer = (this._rapidTimer || 0) + dt * 1000;
+      if (this._rapidTimer >= 300) {
+        this._rapidTimer = 0;
+        this._spawnProjectile();
+      }
+    } else {
+      this._rapidTimer = 0;
+    }
+
+    // ── Giant: ชนศัตรูและ boulder ดาเมจ ──────────
+    if (this.player.activePowerup === 'giant') {
+      const pb = this.player.bounds;
+      for (const e of this.enemies.enemies) {
+        if (!e.alive) continue;
+        if (_rectsOverlap(pb, e.bounds)) {
+          this.enemies.killEnemy(e);
+          this._enemyKills++;
+          const pts = e.points * 2;
+          this._killScore += pts;
+          this.hud.addScore(0, e.x, e.y - 10, `💥 +${pts}`);
+          this._spawnExplosion(e.x + e.w/2, e.y + e.h/2);
+        }
+      }
+      for (const b of this.boulders.boulders) {
+        if (!b.alive) continue;
+        const nearX = Math.max(pb.x, Math.min(b.x, pb.x+pb.w));
+        const nearY = Math.max(pb.y, Math.min(b.y, pb.y+pb.h));
+        const dx = b.x-nearX, dy = b.y-nearY;
+        if (dx*dx + dy*dy < b.r*b.r) {
+          b.alive = false;
+          this._killScore += 150;
+          this._spawnExplosion(b.x, b.y);
+        }
+      }
+    }
+
+    // ── Enemy collision ────────────────────────────
+    const isImmune = this.player.activePowerup === 'ghost' ||
+                     this.player.activePowerup === 'freeze' ||
+                     this.player.activePowerup === 'giant';
     const hitEnemy = this.enemies.checkCollisions(this.player);
-    if (hitEnemy && !this.player.invincible) {
+    if (hitEnemy && !this.player.invincible && !isImmune) {
       const pb = this.player.bounds;
       const eb = hitEnemy.bounds;
       // ด้านท้าย (ขวา) = player center อยู่ทางขวาของ enemy center → ไม่ damage
@@ -1137,6 +1276,7 @@ class Game {
     ctx.restore();
 
     this._drawEffects(ctx);
+    this._drawPowerupHUD(ctx);
     this.hud.draw(ctx, STATE.PLAYING);
     this.hud.drawPowerups(ctx, this.player);
     this.joypad.draw(ctx);

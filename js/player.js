@@ -32,12 +32,20 @@ class Player {
     this.invTimer    = 0;
     this.blinkPhase  = 0;
 
-    // power-ups
+    // power-ups (existing)
     this.shielded    = false;
     this.shieldTimer = 0;
-    this.speedUp     = false;   // ยังคงไว้ใน code แต่ไม่ถูกใช้จาก item แล้ว
+    this.speedUp     = false;
     this.speedTimer  = 0;
     this.speedMult   = 1;
+
+    // ── Special Power-ups ─────────────────────────
+    this.activePowerup  = null;    // key ของ powerup ที่กำลัง active
+    this.powerupTimer   = 0;       // ms เหลืออยู่
+    this._flyY          = 0;       // Y target ตอน fly
+    this._giantOrigW    = 0;
+    this._giantOrigH    = 0;
+    this._giantOrigY    = 0;
 
     // ── Weapon Charge (B button) ───────────────────
     this.weaponCharge  = WEAPON_CHARGE_MS;  // ms — เริ่มพร้อมยิงได้เลย
@@ -67,7 +75,7 @@ class Player {
   setJumpHeld(isHeld, forceEdge = false) {
     const justPressed = (isHeld && !this._jumpHeld) || forceEdge;
 
-    if (justPressed) {
+    if (justPressed && this.activePowerup !== 'fly') {
       if (this.onGround) {
         this._tryJump();
       } else if (this._hasDoubleJump) {
@@ -177,6 +185,57 @@ class Player {
     return true;
   }
 
+  // ── Special Power-up ─────────────────────────────
+  activatePowerup(key) {
+    if (this.activePowerup) this._endPowerup(this.activePowerup);
+
+    const def = Object.values(POWERUP_TYPES).find(p => p.key === key);
+    if (!def) return;
+
+    // จบ slide ก่อน activate ทุก powerup
+    if (this.sliding) this._endSlide();
+
+    this.activePowerup = key;
+    this.powerupTimer  = def.duration;
+
+    switch (key) {
+      case 'speed_boost':
+        this.speedMult = 0.5;
+        break;
+      case 'fly':
+        this.onGround = false;
+        this.vy       = -400;
+        this._flyY    = 60;
+        break;
+      case 'giant':
+        this._giantOrigW = this.w;
+        this._giantOrigH = this.h;
+        this.w = PLAYER_W * 2.2;
+        this.h = PLAYER_H * 2.2;
+        this.y = GROUND_Y - this.h;
+        break;
+    }
+  }
+
+  _endPowerup(key) {
+    switch (key) {
+      case 'speed_boost':
+        this.speedMult = 1;
+        break;
+      case 'fly':
+        this.vy = 0;
+        break;
+      case 'giant':
+        this.w = this._giantOrigW || PLAYER_W;
+        this.h = this._giantOrigH || PLAYER_H;
+        // snap กลับพื้นเฉพาะตอนอยู่บนพื้น ถ้ากระโดดอยู่ให้ gravity จัดการ
+        if (this.onGround) this.y = GROUND_Y - this.h;
+        break;
+    }
+    this.activePowerup = null;
+    this.powerupTimer  = 0;
+  }
+
   // ── Power-ups ────────────────────────────────────
   applyPowerup(type) {
     if (type === 'shield') {
@@ -211,7 +270,24 @@ class Player {
       this.specialGauge = 5;
     }
 
-    // variable jump
+    // ── Special powerup timer ────────────────────
+    if (this.activePowerup && this.powerupTimer > 0) {
+      this.powerupTimer -= dt * 1000;
+      if (this.powerupTimer <= 0) {
+        this._endPowerup(this.activePowerup);
+      }
+    }
+
+    // fly: ลอยอยู่บนจอ ควบคุม Y ด้วย jump held
+    if (this.activePowerup === 'fly') {
+      const targetY = this._jumpHeld ? 40 : 120;
+      this.y += (targetY - this.y) * dt * 3;
+      this.vy       = 0;
+      this.onGround = false;
+      this.jumping  = false;
+    }
+
+    // variable jump hold
     if (this._jumpHeld && this.jumping && !this._jumpCut) {
       this._jumpHeldMs += dt * 1000;
       if (this._jumpHeldMs >= JUMP_HOLD_MS) this._jumpCut = true;

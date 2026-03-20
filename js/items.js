@@ -67,18 +67,25 @@ class Item {
       return;
     }
 
-    // ORB มี glow ring พิเศษ
-    if (this.typeKey === 'ORB') {
-      const pulse = Math.sin(this._t * 2) * 0.5 + 0.5;
+    // POWERUP item — glow ring พิเศษ
+    if (this.typeKey === 'POWERUP') {
+      const pulse = Math.sin(this._t * 2.5) * 0.5 + 0.5;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(this.x + this.w/2, this.y + this.h/2 + bob, this.w * 0.7, 0, Math.PI*2);
-      ctx.fillStyle   = `rgba(100,180,255,${0.12 + pulse * 0.15})`;
+      ctx.arc(this.x + this.w/2, this.y + this.h/2 + bob, this.w * 0.85, 0, Math.PI*2);
+      ctx.fillStyle   = `rgba(255,220,50,${0.12 + pulse * 0.18})`;
       ctx.fill();
-      ctx.strokeStyle = `rgba(80,160,255,${0.4 + pulse * 0.4})`;
-      ctx.lineWidth   = 1.5;
+      ctx.strokeStyle = `rgba(255,200,0,${0.5 + pulse * 0.4})`;
+      ctx.lineWidth   = 2.5;
       ctx.stroke();
       ctx.restore();
+      ctx.globalAlpha = glow;
+      ctx.font        = `${this.w * 1.1}px serif`;
+      ctx.textBaseline = 'top';
+      ctx.textAlign    = 'left';
+      ctx.fillText(this.emoji, this.x, this.y + bob);
+      ctx.globalAlpha = 1;
+      return;
     }
 
     ctx.globalAlpha  = glow;
@@ -133,23 +140,33 @@ class ItemManager {
   }
 
   _spawn(dist) {
+    // สุ่ม special powerup ก่อน
+    if (dist > 100 && Math.random() < POWERUP_SPAWN_CHANCE) {
+      const enabled = Object.values(POWERUP_TYPES).filter(p => p.enabled);
+      if (enabled.length > 0) {
+        const def  = enabled[Math.floor(Math.random() * enabled.length)];
+        const x    = WIDTH + 20;
+        const y    = GROUND_Y - 48;
+        const item = new Item('POWERUP', x, y);
+        item._powerupKey = def.key;
+        item.emoji       = def.emoji;
+        item.w = item.h  = 40;
+        this.items.push(item);
+        return;
+      }
+    }
+
     const r = Math.random();
     let typeKey;
-    // COIN 55% / STAR 20% / HEART 15% / SHIELD 10%
     if      (r < 0.55) typeKey = 'COIN';
     else if (r < 0.75) typeKey = 'STAR';
     else if (r < 0.90) typeKey = 'HEART';
     else               typeKey = 'SHIELD';
 
     const x = WIDTH + 20;
-    const heights = [
-      GROUND_Y - 36,
-      GROUND_Y - 80,
-      GROUND_Y - 140,
-    ];
+    const heights = [GROUND_Y - 36, GROUND_Y - 80, GROUND_Y - 140];
     const y = heights[Math.floor(Math.random() * heights.length)];
 
-    // coin chain
     if (typeKey === 'COIN' && Math.random() < 0.5) {
       const count = 3 + Math.floor(Math.random() * 4);
       for (let i = 0; i < count; i++) {
