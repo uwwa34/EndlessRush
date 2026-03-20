@@ -147,7 +147,7 @@ const ASSET_IMAGES = {
   player      : 'assets/images/player.png',
   background  : 'assets/images/background.png',   // BG รูปเดียว
   boss        : 'assets/images/boss.png',          // boss รูปเดียว
-  // enemy_ground : 'assets/images/enemy_ground.png',
+  enemy_ground : 'assets/images/enemy_ground.png',
   enemy_air    : 'assets/images/enemy_air.png',
   item_coin    : 'assets/images/item_coin.png',
   // item_star    : 'assets/images/item_star.png',
