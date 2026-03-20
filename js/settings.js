@@ -122,14 +122,14 @@ const ENEMY_TYPES = {
 // เปลี่ยน enabled: true/false เพื่อเปิด/ปิดแต่ละ power-up
 const POWERUP_DURATION_MS = 10000;   // ระยะเวลา default 10 วิ
 const POWERUP_TYPES = {
-  SPEED_BOOST : { key:'speed_boost', emoji:'⚡', label:'Slow-Mo',    enabled: true,  duration: POWERUP_DURATION_MS },
+  SPEED_BOOST : { key:'speed_boost', emoji:'⚡', label:'Slow-Mo',    enabled: false,  duration: POWERUP_DURATION_MS },
   MAGNET      : { key:'magnet',      emoji:'🧲', label:'Magnet',     enabled: true,  duration: POWERUP_DURATION_MS },
-  FREEZE      : { key:'freeze',      emoji:'❄️', label:'Freeze',     enabled: true,  duration: POWERUP_DURATION_MS },
-  GHOST       : { key:'ghost',       emoji:'👻', label:'Ghost',      enabled: true,  duration: POWERUP_DURATION_MS },
-  FLY         : { key:'fly',         emoji:'🪂', label:'Fly',        enabled: true,  duration: POWERUP_DURATION_MS },
-  BOMB        : { key:'bomb',        emoji:'💣', label:'Bomb',       enabled: true,  duration: 0    },   // ทันที
-  RAPID_FIRE  : { key:'rapid_fire',  emoji:'🔫', label:'Rapid Fire', enabled: true,  duration: POWERUP_DURATION_MS },
-  GIANT       : { key:'giant',       emoji:'🌀', label:'Giant',      enabled: true,  duration: POWERUP_DURATION_MS },
+  FREEZE      : { key:'freeze',      emoji:'❄️', label:'Freeze',     enabled: false,  duration: POWERUP_DURATION_MS },
+  GHOST       : { key:'ghost',       emoji:'👻', label:'Ghost',      enabled: false,  duration: POWERUP_DURATION_MS },
+  FLY         : { key:'fly',         emoji:'🪂', label:'Fly',        enabled: false,  duration: POWERUP_DURATION_MS },
+  BOMB        : { key:'bomb',        emoji:'💣', label:'Bomb',       enabled: false,  duration: 0    },   // ทันที
+  RAPID_FIRE  : { key:'rapid_fire',  emoji:'🔫', label:'Rapid Fire', enabled: false,  duration: POWERUP_DURATION_MS },
+  GIANT       : { key:'giant',       emoji:'🌀', label:'Giant',      enabled: false,  duration: POWERUP_DURATION_MS },
 };
 // spawn chance ของ special item (ต่อ spawn cycle)
 const POWERUP_SPAWN_CHANCE = 0.08;   // 8% ต่อ cycle
