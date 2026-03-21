@@ -619,33 +619,52 @@ class Game {
     const p = this.player;
     if (!p.activePowerup || p.powerupTimer <= 0) return;
     const def = Object.values(POWERUP_TYPES).find(d => d.key === p.activePowerup);
-    if (!def) return;
+    if (!def || def.duration <= 0) return;
 
-    if (!def || def.duration <= 0) return;   // bomb = ทันที ไม่มี bar
-    const ratio  = Math.max(0, p.powerupTimer / def.duration);
-    const barW   = 140, barH = 10;
-    const barX   = WIDTH/2 - barW/2;
-    const barY   = 36;
+    const ratio   = Math.max(0, p.powerupTimer / def.duration);
+    const secLeft = Math.ceil(p.powerupTimer / 1000);
+    const barW    = 130, barH = 10;
+    const barX    = WIDTH/2 - barW/2;
+    const barY    = 37;
 
-    // bg
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.roundRect(barX-1, barY-1, barW+2, barH+2, 6); ctx.fill();
-
-    // fill — gradient สีตาม powerup
     const colors = {
       speed_boost:'#64B5F6', magnet:'#CE93D8', freeze:'#80DEEA',
       ghost:'#B0BEC5', fly:'#A5D6A7', rapid_fire:'#EF9A9A',
       giant:'#FFD54F', bomb:'#FFAB91',
     };
-    ctx.fillStyle = colors[p.activePowerup] || '#4CAF50';
-    ctx.beginPath(); ctx.roundRect(barX, barY, barW * ratio, barH, 5); ctx.fill();
+    const col = colors[p.activePowerup] || '#4CAF50';
 
-    // label
+    // icon ซ้าย (sprite หรือ emoji)
+    const iconX = barX - 28, iconY = barY - 8;
+    if (def.sprite) {
+      ctx.drawImage(def.sprite, iconX - 4, iconY, 26, 26);
+    } else {
+      ctx.font = '20px serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(def.emoji, iconX, iconY);
+    }
+
+    // label + วินาที
     ctx.fillStyle    = '#fff';
     ctx.font         = `bold 11px ${FONT.MAIN}`;
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(`${def.emoji} ${def.label}`, WIDTH/2, barY - 2);
+    ctx.fillText(`${def.label}`, WIDTH/2, barY - 2);
+
+    // bar bg
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.roundRect(barX-1, barY-1, barW+2, barH+2, 6); ctx.fill();
+
+    // bar fill
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.roundRect(barX, barY, barW * ratio, barH, 5); ctx.fill();
+
+    // วินาทีที่เหลือ — ขวาของ bar
+    ctx.fillStyle    = ratio < 0.3 ? '#FF5252' : '#fff';
+    ctx.font         = `bold 11px ${FONT.MAIN}`;
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${secLeft}s`, barX + barW + 5, barY + barH/2);
   }
 
   _spawnRaidPlatform() {
