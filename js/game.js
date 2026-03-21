@@ -621,50 +621,38 @@ class Game {
     const def = Object.values(POWERUP_TYPES).find(d => d.key === p.activePowerup);
     if (!def || def.duration <= 0) return;
 
-    const ratio   = Math.max(0, p.powerupTimer / def.duration);
-    const secLeft = Math.ceil(p.powerupTimer / 1000);
-    const barW    = 130, barH = 10;
-    const barX    = WIDTH/2 - barW/2;
-    const barY    = 37;
+    const ratio  = Math.max(0, p.powerupTimer / def.duration);
+    const cx     = this.player.x + this.player.w / 2;
+    const iconSize = 28;
+    const barW   = 40, barH = 5;
+    const iconY  = this.player.y - iconSize - barH - 8;
+    const barX   = cx - barW / 2;
+    const barY   = iconY + iconSize + 3;
 
-    const colors = {
-      speed_boost:'#64B5F6', magnet:'#CE93D8', freeze:'#80DEEA',
-      ghost:'#B0BEC5', fly:'#A5D6A7', rapid_fire:'#EF9A9A',
-      giant:'#FFD54F', bomb:'#FFAB91',
-    };
-    const col = colors[p.activePowerup] || '#4CAF50';
-
-    // icon ซ้าย (sprite หรือ emoji)
-    const iconX = barX - 28, iconY = barY - 8;
+    // icon รูป power_up หรือ emoji
     if (def.sprite) {
-      ctx.drawImage(def.sprite, iconX - 4, iconY, 26, 26);
+      ctx.globalAlpha = 0.92;
+      ctx.drawImage(def.sprite, cx - iconSize/2, iconY, iconSize, iconSize);
+      ctx.globalAlpha = 1;
     } else {
-      ctx.font = '20px serif';
-      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-      ctx.fillText(def.emoji, iconX, iconY);
+      ctx.font = `${iconSize}px serif`;
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(def.emoji, cx, iconY);
     }
 
-    // label + วินาที
-    ctx.fillStyle    = '#fff';
-    ctx.font         = `bold 11px ${FONT.MAIN}`;
-    ctx.textAlign    = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(`${def.label}`, WIDTH/2, barY - 2);
-
     // bar bg
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.roundRect(barX-1, barY-1, barW+2, barH+2, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath(); ctx.roundRect(barX - 1, barY - 1, barW + 2, barH + 2, 3); ctx.fill();
 
-    // bar fill
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.roundRect(barX, barY, barW * ratio, barH, 5); ctx.fill();
+    // bar fill — เขียว→เหลือง→แดง
+    let barColor;
+    if (ratio > 0.5)      barColor = '#4CAF50';
+    else if (ratio > 0.25) barColor = '#FFC107';
+    else                   barColor = '#F44336';
 
-    // วินาทีที่เหลือ — ขวาของ bar
-    ctx.fillStyle    = ratio < 0.3 ? '#FF5252' : '#fff';
-    ctx.font         = `bold 11px ${FONT.MAIN}`;
-    ctx.textAlign    = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${secLeft}s`, barX + barW + 5, barY + barH/2);
+    ctx.fillStyle = barColor;
+    ctx.beginPath(); ctx.roundRect(barX, barY, barW * ratio, barH, 2); ctx.fill();
   }
 
   _spawnRaidPlatform() {
