@@ -119,20 +119,27 @@ const ENEMY_TYPES = {
 };
 
 // ── Power-up Special Items ────────────────────────────
-// เปลี่ยน enabled: true/false เพื่อเปิด/ปิดแต่ละ power-up
-const POWERUP_DURATION_MS = 10000;   // ระยะเวลา default 10 วิ
-const POWERUP_TYPES = {
-  SPEED_BOOST : { key:'speed_boost', emoji:'⚡', label:'Slow-Mo',    enabled: false, duration: POWERUP_DURATION_MS, sprite: null },
-  MAGNET      : { key:'magnet',      emoji:'🧲', label:'Magnet',     enabled: true,  duration: POWERUP_DURATION_MS, sprite: null },
-  FREEZE      : { key:'freeze',      emoji:'❄️', label:'Freeze',     enabled: false, duration: POWERUP_DURATION_MS, sprite: null },
-  GHOST       : { key:'ghost',       emoji:'👻', label:'Ghost',      enabled: false, duration: POWERUP_DURATION_MS, sprite: null },
-  FLY         : { key:'fly',         emoji:'🪂', label:'Fly',        enabled: false, duration: POWERUP_DURATION_MS, sprite: null },
-  BOMB        : { key:'bomb',        emoji:'💣', label:'Bomb',       enabled: false, duration: 0,                   sprite: null },
-  RAPID_FIRE  : { key:'rapid_fire',  emoji:'🔫', label:'Rapid Fire', enabled: false, duration: POWERUP_DURATION_MS, sprite: null },
-  GIANT       : { key:'giant',       emoji:'🌀', label:'Giant',      enabled: false, duration: POWERUP_DURATION_MS, sprite: null },
+// ใส่ชื่อ power-up ที่ต้องการเปิดใช้ (ใส่หลายตัวได้)
+// ตัวเลือก: 'MAGNET' | 'SPEED_BOOST' | 'FREEZE' | 'GHOST' | 'FLY' | 'BOMB' | 'RAPID_FIRE' | 'GIANT'
+const ACTIVE_POWERUPS = ['MAGNET'];   // ← แก้ที่นี่ที่เดียว
+
+const POWERUP_DURATION_MS = 10000;
+const _PU = {
+  SPEED_BOOST : { key:'speed_boost', emoji:'⚡', label:'Slow-Mo',    duration: POWERUP_DURATION_MS, sprite: null },
+  MAGNET      : { key:'magnet',      emoji:'🧲', label:'Magnet',     duration: POWERUP_DURATION_MS, sprite: null },
+  FREEZE      : { key:'freeze',      emoji:'❄️', label:'Freeze',     duration: POWERUP_DURATION_MS, sprite: null },
+  GHOST       : { key:'ghost',       emoji:'👻', label:'Ghost',      duration: POWERUP_DURATION_MS, sprite: null },
+  FLY         : { key:'fly',         emoji:'🪂', label:'Fly',        duration: POWERUP_DURATION_MS, sprite: null },
+  BOMB        : { key:'bomb',        emoji:'💣', label:'Bomb',       duration: 0,                   sprite: null },
+  RAPID_FIRE  : { key:'rapid_fire',  emoji:'🔫', label:'Rapid Fire', duration: POWERUP_DURATION_MS, sprite: null },
+  GIANT       : { key:'giant',       emoji:'🌀', label:'Giant',      duration: POWERUP_DURATION_MS, sprite: null },
 };
-// spawn chance ของ special item (ต่อ spawn cycle)
-const POWERUP_SPAWN_CHANCE = 0.08;   // 8% ต่อ cycle
+// สร้าง POWERUP_TYPES จาก ACTIVE_POWERUPS โดยอัตโนมัติ
+const POWERUP_TYPES = Object.fromEntries(
+  Object.entries(_PU).map(([k, v]) => [k, { ...v, enabled: ACTIVE_POWERUPS.includes(k) }])
+);
+
+const POWERUP_SPAWN_CHANCE = 0.08;
 const DIST_POINT_PER_M = 1;
 const BOSS_KILL_BONUS  = 1000;
 
@@ -150,7 +157,8 @@ const ASSET_IMAGES = {
   enemy_ground  : 'assets/images/enemy_ground.png',
   enemy_air     : 'assets/images/enemy_air.png',
   item_coin     : 'assets/images/item_coin.png',
-  power_up      : 'assets/images/power_up.png',   // รูปเดียวสำหรับทุก powerup
+  item_star     : 'assets/images/item_star.png',
+  power_up      : 'assets/images/power_up.png',
 };
 
 const ASSET_SOUNDS = {
