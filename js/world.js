@@ -157,7 +157,7 @@ class World {
     const dx  = spd * dt;
     this.scrollX   += dx;
     this.distanceM  = this.scrollX / 10;
-    this._bgX      += dx * 0.3;   // bg scrolls slower (parallax)
+    this._bgX      += dx * 0.06;   // bg scrolls slower (parallax)
     for (let i = 0; i < 3; i++) this._layerOffsets[i] += dx * BG_LAYERS[i].speedFactor;
     this.platforms.update(dt, spd, this.distanceM);
   }
