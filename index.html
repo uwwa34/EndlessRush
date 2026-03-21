@@ -116,9 +116,9 @@
   <canvas id="gameCanvas" width="390" height="720"></canvas>
   <div id="scanlines"></div>
   <div id="loading">
-    <div id="load-logo" class="load-logo">🦊</div>
+    <div id="load-logo" class="load-logo"><img src="assets/images/player.png" alt="player"/></div>
     <div class="load-title">ENDLESS RUSH</div>
-    <div class="load-sub">วิ่ง · กระโดด · เอาชนะ Boss!</div>
+    <div class="load-sub">วิ่ง · กระโดด · ไปให้ไกลที่สุด!</div>
     <div id="load-bar-bg"><div id="load-bar"></div></div>
     <div id="load-msg">กำลังเตรียมการผจญภัย...</div>
   </div>
@@ -196,14 +196,6 @@ function loadSnd(src, isBGM){
     var ires=await Promise.all(ikeys.map(function(k){return loadImg(ASSET_IMAGES[k]);}));
     var images={};
     ikeys.forEach(function(k,i){if(ires[i])images[k]=ires[i];});
-
-    // สลับ logo เป็นรูป player
-    if(images.player){
-      var logo=document.getElementById('load-logo');
-      var el=document.createElement('img');
-      el.src=images.player.src;
-      logo.textContent=''; logo.appendChild(el);
-    }
 
     // โหลดเสียง — BGM ใช้ Audio element, SFX ใช้ Web Audio Buffer
     setBar(50,'โหลดเสียง...');
