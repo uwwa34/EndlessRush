@@ -1,5 +1,16 @@
 // ═══════════════════════════════════════════════════
 //  js/boulder.js  —  Endless Rush  (Rolling Boulder)
+//
+//  สิ่งกีดขวางกลิ้ง spawn จากขวา เลื่อนมาชน player
+//  มี 2 แบบสุ่ม: หิน (rock) และลูกหนาม (spike ball)
+//
+//  Physics: มี vy และกระดอนเล็กน้อยเมื่อแตะพื้น
+//           หมุนตามความเร็ว (angle += vx/r * dt)
+//
+//  BoulderManager.checkProjectileHit(proj)
+//    — ยิงโดน = boulder ตาย, return boulder object
+//  BoulderManager.checkCollision(player)
+//    — ชน player = return boulder object
 // ═══════════════════════════════════════════════════
 
 class Boulder {

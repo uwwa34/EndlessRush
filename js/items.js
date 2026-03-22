@@ -1,5 +1,19 @@
 // ═══════════════════════════════════════════════════
 //  js/items.js  —  Endless Rush
+//
+//  จัดการ collectible items ทั้งหมด
+//
+//  Item types (settings.js ITEM_TYPES):
+//    COIN    🪙 — +50 pts
+//    STAR    ⭐ — +200 pts + weapon charge ทันที
+//    HEART   ❤️ — +1 HP
+//    SHIELD  🛡️ — absorb hit ครั้งถัดไป
+//    POWERUP    — special powerup (emoji ตาม powerup จริง)
+//
+//  ItemManager.update(dt, worldSpeed, distanceM, platforms, speedBoost)
+//    speedBoost = true: spawn coin chain ถี่ขึ้น 3x
+//
+//  ItemManager.checkCollect(player) → Item | null
 // ═══════════════════════════════════════════════════
 
 class Item {
@@ -113,21 +127,21 @@ class ItemManager {
   constructor() {
     this.items      = [];
     this._spawnT    = 0;
-    this._nextSpawn = 1200 + Math.random() * 1000;
+    this._nextSpawn = ITEM_SPAWN_INIT_MS + Math.random() * 1000;
   }
 
   reset() {
     this.items      = [];
     this._spawnT    = 0;
-    this._nextSpawn = 1200 + Math.random() * 1000;
+    this._nextSpawn = ITEM_SPAWN_INIT_MS + Math.random() * 1000;
   }
 
   update(dt, worldSpeed, distanceM, platformList, speedBoost = false) {
     this._spawnT += dt * 1000;
     // speed_boost: spawn เหรียญถี่ขึ้น 3 เท่า
     const spawnInterval = speedBoost
-      ? (800 + Math.random() * 1400) / 3
-      : (800 + Math.random() * 1400);
+      ? (ITEM_SPAWN_MIN_MS + Math.random() * ITEM_SPAWN_MAX_MS) / 3
+      : (ITEM_SPAWN_MIN_MS + Math.random() * ITEM_SPAWN_MAX_MS);
     if (this._spawnT >= this._nextSpawn) {
       this._spawnT    = 0;
       this._nextSpawn = spawnInterval;

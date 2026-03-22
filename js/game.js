@@ -1,5 +1,23 @@
 // ═══════════════════════════════════════════════════
-//  js/game.js  —  Endless Rush  v1
+//  js/game.js  —  Endless Rush
+//
+//  ไฟล์นี้ประกอบด้วย 3 class หลัก:
+//
+//  PlayerProjectile — กระสุนที่ player ยิงออกไป
+//
+//  VirtualJoypad    — จัดการ input ทั้งหมด
+//    - keyboard: Space/X/↑ = Jump, Z/↓ = Fire
+//    - touch: ปุ่ม A (ขวา) = Jump, ปุ่ม B (ซ้าย) = Fire
+//
+//  Game             — main controller ของเกมทั้งหมด
+//    - STATE machine: LOADING → INTRO → PLAYING → TALLY → NAME → RANKING
+//    - เรียก update() และ draw() ทุก frame ผ่าน requestAnimationFrame
+//    - จัดการ audio (Web Audio API + HTMLAudio fallback สำหรับ iOS)
+//    - จัดการ collision, powerup, scoring, boss raid
+//
+//  Dependencies (โหลดก่อน game.js):
+//    settings.js, player.js, world.js, enemy.js,
+//    boulder.js, items.js, boss.js, hud.js, ranking.js
 // ═══════════════════════════════════════════════════
 
 // ── Player Projectile ────────────────────────────────
@@ -256,8 +274,6 @@ class Game {
     this._comboTimer     = 0;
     this._killScore      = 0;
     this._enemyKills     = 0;
-    this._bossWarningShown = false;
-
     this._projectiles = [];
 
     // particles / effects
@@ -303,7 +319,7 @@ class Game {
     const bgm = this._sounds[key];
     if (!bgm) return;
     bgm.loop   = true;
-    bgm.volume = 0.35;
+    bgm.volume = BGM_VOLUME;
     bgm.muted  = false;
     window._bgmEl = bgm;
     if (window._audioCtx && window._audioCtx.state === 'suspended') {
@@ -396,7 +412,7 @@ class Game {
         try {
           const src  = ctx.createBufferSource();
           const gain = ctx.createGain();
-          gain.gain.value = 0.6;
+          gain.gain.value = SFX_VOLUME;
           src.buffer = buf;
           src.connect(gain);
           gain.connect(ctx.destination);
@@ -423,7 +439,7 @@ class Game {
     }
     try {
       const clone = typeof s.cloneNode === 'function' ? s.cloneNode(true) : s;
-      clone.volume = 0.6;
+      clone.volume = SFX_VOLUME;
       clone.muted  = false;
       const p = clone.play();
       if (p instanceof Promise) p.catch(() => {});
@@ -518,9 +534,10 @@ class Game {
     this.rankScreen.hide();
     this.tallyScreen.visible = false;
 
-    this.world.bossAlpha = 0;
-    this.raid.state      = RAID_STATE.IDLE;
-    this._projectiles    = [];
+    this.world.bossAlpha   = 0;
+    this.raid.state        = RAID_STATE.IDLE;
+    this.raid.projectiles  = [];   // clear boss projectiles ที่อาจค้าง
+    this._projectiles      = [];
 
     // reset powerup
     if (this.player.activePowerup) this.player._endPowerup(this.player.activePowerup);
@@ -561,10 +578,12 @@ class Game {
     this._comboTimer       = 0;
     this._killScore        = 0;
     this._enemyKills       = 0;
-    this._bossWarningShown = false;
+
+    this._raidSfxPlayed    = false;
     this._effects          = [];
     this._projectiles      = [];
     this.raid.state        = RAID_STATE.IDLE;
+    this.raid.projectiles  = [];   // clear boss projectiles ที่อาจค้างจาก raid ก่อน
 
     this.world.start();
     this.state = STATE.PLAYING;
@@ -628,7 +647,8 @@ class Game {
     const cx     = this.player.x + this.player.w / 2;
     const iconSize = 28;
     const barW   = 40, barH = 5;
-    const iconY  = this.player.y - iconSize - barH - 8;
+    const rawIconY = this.player.y - iconSize - barH - 8;
+    const iconY  = Math.max(4, rawIconY);   // clamp ไม่ให้ออกนอก canvas บน
     const barX   = cx - barW / 2;
     const barY   = iconY + iconSize + 3;
 
@@ -680,14 +700,10 @@ class Game {
     const plats = this.world.platforms.platforms;
 
     // ชั้น 1: 115px เหนือพื้น — กระโดดจากพื้นได้
-    plats.push({ x: spawn1X, y: GROUND_Y - 115, w: 180, h: 20, level: 1, _coinsSpawned: true });
-
-    // ชั้น 2: 230px เหนือพื้น — กระโดดจากชั้น 1 ได้ (diff=115px ≤ max 162px)
-    plats.push({ x: spawn2X, y: GROUND_Y - 230, w: 160, h: 20, level: 2, _coinsSpawned: true });
-
-    // ชั้น 3: 320px เหนือพื้น — กระโดดจากชั้น 2 ได้ (diff=90px)
-    // ยืนบน ชั้น 3 แล้วอยู่เหนือ boss ที่บินมาระดับต่ำสุด
-    plats.push({ x: spawn3X, y: GROUND_Y - 320, w: 140, h: 20, level: 3, _coinsSpawned: true });
+    // ใช้ PLAT_Y จาก settings.js — ต้องตรงกับ world.js เสมอ
+    plats.push({ x: spawn1X, y: PLAT_Y[1], w: 180, h: 20, level: 1, _coinsSpawned: true });
+    plats.push({ x: spawn2X, y: PLAT_Y[2], w: 160, h: 20, level: 2, _coinsSpawned: true });
+    plats.push({ x: spawn3X, y: PLAT_Y[3], w: 140, h: 20, level: 3, _coinsSpawned: true });
   }
 
   _activatePowerup(key, x, y) {
@@ -731,9 +747,9 @@ class Game {
 
   _updateEffects(dt) {
     for (const ef of this._effects) {
-      ef.x += ef.vx * dt;
-      ef.y += ef.vy * dt;
-      ef.vy += 400 * dt;
+      ef.x  += ef.vx * dt;
+      ef.y  += ef.vy * dt;
+      if (!ef._ring) ef.vy += 400 * dt;  // gravity สำหรับ floating effects เท่านั้น (ไม่ใช่ ring)
       ef.life -= dt * 1.8;
     }
     this._effects = this._effects.filter(e => e.life > 0);
@@ -771,6 +787,11 @@ class Game {
     this._bindVisibility();
     requestAnimationFrame(ts => this._loop(ts));
     this._goIntro();
+  }
+
+  /** หยุด game loop — เรียกเมื่อต้องการ unmount เกมออกจากหน้า */
+  stop() {
+    this.running = false;
   }
 
   _loop(ts) {
@@ -820,21 +841,23 @@ class Game {
   }
 
   _updatePlaying(dt) {
-    // boss warning 100m before
-    const distToBoss = this._nextBossDist - this.world.distanceM;
-    if (distToBoss < 100 && !this._bossWarningShown) {
-      this._bossWarningShown = true;
-      this.hud.triggerBossWarning();
-      this._sfx('warning');
-    }
-
     // ── Boss Raid trigger ─────────────────────────
+    // เมื่อถึงระยะ → startRaid() ทันที พร้อม warning HUD + เสียง
     if (this.world.distanceM >= this._nextRaidDist &&
         this.raid.state === RAID_STATE.IDLE) {
       this.raid.startRaid();
-      this._sfx('warning');
-      // spawn platform ช่วย player หลบ
       this._spawnRaidPlatform();
+      this.hud.triggerBossWarning();  // HUD flash
+      this._sfx('warning');           // เสียง warning พร้อมกัน
+    }
+
+    // ── เล่นเสียง boss ตอน INCOMING (บินเข้ามาจริงๆ) ──
+    if (this.raid.state === RAID_STATE.INCOMING && !this._raidSfxPlayed) {
+      this._raidSfxPlayed = true;
+      this._sfx('boss_incoming');     // เสียง wave ตอนบอสบินเข้า
+    }
+    if (this.raid.state === RAID_STATE.IDLE || this.raid.state === RAID_STATE.DONE) {
+      this._raidSfxPlayed = false;
     }
 
     // ── Boss Raid update ──────────────────────────
@@ -882,12 +905,13 @@ class Game {
 
     // raid done → schedule next
     if (this.raid.isDone && this.raid.state !== RAID_STATE.IDLE) {
-      this.raid.state      = RAID_STATE.IDLE;
+      this.raid.state        = RAID_STATE.IDLE;
+      this.raid.projectiles  = [];
       this._bossCount++;
-      // สุ่ม interval ถัดไป 400-700m
-      const nextGap        = BOSS_RAID_MIN + Math.random() * (BOSS_RAID_MAX - BOSS_RAID_MIN);
-      this._nextRaidDist   = this.world.distanceM + nextGap;
-      this.world.bossAlpha = 0;
+      const nextGap          = BOSS_RAID_MIN + Math.random() * (BOSS_RAID_MAX - BOSS_RAID_MIN);
+      this._nextRaidDist     = this.world.distanceM + nextGap;
+  
+      this.world.bossAlpha   = 0;
     }
 
     // darken bg ระหว่าง raid
@@ -952,7 +976,7 @@ class Game {
       const hitB = this.boulders.checkProjectileHit(proj);
       if (hitB) {
         proj.alive = false;
-        const pts = 150;
+        const pts = BOULDER_KILL_BONUS;
         this._killScore += pts;
         this.hud.addScore(0, hitB.x, hitB.y - 20, `💥 +${pts}`);
         this._spawnExplosion(hitB.x, hitB.y);
@@ -977,7 +1001,7 @@ class Game {
           this.enemies.killEnemy(e);
           this._enemyKills++;
           this._comboCount++;
-          this._comboTimer = 2000;
+          this._comboTimer = COMBO_TIMEOUT_MS;
           if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
           const pts = (e.points + PROJ_DMG_NORMAL) * Math.max(1, this._comboCount);
           this._killScore += pts;
@@ -1019,7 +1043,7 @@ class Game {
         this._activatePowerup(collected._powerupKey, collected.x, collected.y);
       }
       this._comboCount++;
-      this._comboTimer = 2000;
+      this._comboTimer = COMBO_TIMEOUT_MS;
       if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
     }
 
@@ -1028,10 +1052,10 @@ class Game {
       const px     = this.player.x + this.player.w/2;
       const py     = this.player.y + this.player.h/2;
       const isFly  = this.player.activePowerup === 'fly';
-      const radius = isFly ? 320 : 160;   // fly รัศมี 2 เท่า
+      const radius = isFly ? FLY_RADIUS : MAGNET_RADIUS;   // fly รัศมี 2 เท่า
       for (const item of this.items.items) {
         if (!item.alive || item._isBossDrop) continue;
-        if (isFly && item.y > GROUND_Y - 40) continue;  // fly: ไม่ดูด item พื้น
+        if (isFly && item.y > GROUND_Y - FLY_GROUND_CUTOFF) continue;  // fly: ไม่ดูด item พื้น
         const ix = item.x + item.w/2, iy = item.y + item.h/2;
         if (Math.hypot(px-ix, py-iy) < radius) {
           item.x += (px - ix) * dt * 6;
@@ -1045,13 +1069,13 @@ class Game {
       const px = this.player.x + this.player.w/2;
       const py = this.player.y + this.player.h/2;
       this._bombTimer = (this._bombTimer || 0) + dt * 1000;
-      if (this._bombTimer >= 400) {
+      if (this._bombTimer >= BOMB_INTERVAL_MS) {
         this._bombTimer = 0;
-        this._effects.push({ x:px, y:py, vx:0, vy:0, life:0.35, maxLife:0.35, emoji:'💥', size:300, _ring:true });
+        this._effects.push({ x:px, y:py, vx:0, vy:0, life:0.35, maxLife:0.35, emoji:'💥', size:BOMB_RADIUS, _ring:true });
         for (const e of this.enemies.enemies) {
           if (!e.alive) continue;
           const ex = e.x + e.w/2, ey = e.y + e.h/2;
-          if (Math.hypot(px-ex, py-ey) < 300) {
+          if (Math.hypot(px-ex, py-ey) < BOMB_RADIUS) {
             this.enemies.killEnemy(e);
             this._enemyKills++;
             const pts = e.points;
@@ -1062,9 +1086,9 @@ class Game {
         }
         for (const b of this.boulders.boulders) {
           if (!b.alive) continue;
-          if (Math.hypot(px-b.x, py-b.y) < 300) {
+          if (Math.hypot(px-b.x, py-b.y) < BOMB_RADIUS) {
             b.alive = false;
-            this._killScore += 150;
+            this._killScore += BOULDER_KILL_BONUS;
             this._spawnExplosion(b.x, b.y);
           }
         }
@@ -1077,12 +1101,12 @@ class Game {
       const px = this.player.x + this.player.w/2;
       const py = this.player.y + this.player.h/2;
       this._freezeTimer = (this._freezeTimer || 0) + dt * 1000;
-      if (this._freezeTimer >= 600) {
+      if (this._freezeTimer >= FREEZE_SCORE_MS) {
         this._freezeTimer = 0;
-        this._effects.push({ x:px, y:py, vx:0, vy:0, life:0.5, maxLife:0.5, emoji:'❄️', size:150, _ring:true });
+        this._effects.push({ x:px, y:py, vx:0, vy:0, life:0.5, maxLife:0.5, emoji:'❄️', size:FREEZE_RADIUS, _ring:true });
         for (const e of this.enemies.enemies) {
           if (!e.alive) continue;
-          if (Math.hypot(px - (e.x+e.w/2), py - (e.y+e.h/2)) < 150) {
+          if (Math.hypot(px-(e.x+e.w/2), py-(e.y+e.h/2)) < FREEZE_RADIUS) {
             const pts = Math.floor(e.points * 0.5);
             this._killScore += pts;
             this.hud.addScore(0, e.x, e.y-10, `❄️ +${pts}`);
@@ -1094,7 +1118,7 @@ class Game {
     // ── Rapid Fire ─────────────────────────────────
     if (this.player.activePowerup === 'rapid_fire') {
       this._rapidTimer = (this._rapidTimer || 0) + dt * 1000;
-      if (this._rapidTimer >= 300) {
+      if (this._rapidTimer >= RAPID_FIRE_MS) {
         this._rapidTimer = 0;
         this._spawnProjectile();
       }
@@ -1122,7 +1146,7 @@ class Game {
         const dx = b.x-nearX, dy = b.y-nearY;
         if (dx*dx + dy*dy < b.r*b.r) {
           b.alive = false;
-          this._killScore += 150;
+          this._killScore += BOULDER_KILL_BONUS;
           this._spawnExplosion(b.x, b.y);
         }
       }
@@ -1148,12 +1172,12 @@ class Game {
       if (enemyPassed) {
         // ศัตรูผ่านไปแล้ว — set cooldown เงียบๆ ไม่กระพริบ ไม่มี SFX
         this._passedCooldown = (this._passedCooldown || 0);
-        this._passedCooldown = Math.max(this._passedCooldown, 300);
+        this._passedCooldown = Math.max(this._passedCooldown, PASSED_COOLDOWN_MS);
       } else if (this.player.dashing) {
         this.enemies.killEnemy(hitEnemy);
         this._enemyKills++;
         this._comboCount++;
-        this._comboTimer = 2000;
+        this._comboTimer = COMBO_TIMEOUT_MS;
         if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
         const pts = hitEnemy.points * Math.max(1, this._comboCount) + DASH_POINTS;
         this._killScore += pts;
@@ -1166,7 +1190,7 @@ class Game {
         this.player.stompBounce();
         this._sfx('coin');
         this._comboCount++;
-        this._comboTimer = 2000;
+        this._comboTimer = COMBO_TIMEOUT_MS;
         if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
         const pts = hitEnemy.points * Math.max(1, this._comboCount);
         this._killScore += pts;

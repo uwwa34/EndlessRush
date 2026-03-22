@@ -1,5 +1,18 @@
 // ═══════════════════════════════════════════════════
 //  js/hud.js  —  Endless Rush
+//
+//  วาด HUD ทั้งหมดบน canvas ในระหว่าง STATE.PLAYING
+//  และ joypad buttons (A/B)
+//
+//  HUD elements:
+//    - HP hearts (บนซ้าย)
+//    - Score (บนกลาง)
+//    - Distance bar (ล่าง)
+//    - Weapon charge bar (ล่าง)
+//    - Score pop-up animations (hud.addScore)
+//    - Screen shake (hud.triggerShake)
+//    - Boss HP bar (ระหว่าง raid)
+//    - Powerup timer bar (เหนือหัว player — วาดใน game.js)
 // ═══════════════════════════════════════════════════
 
 class HUD {
@@ -137,8 +150,8 @@ class HUD {
   }
 
   _drawBossProgress(ctx) {
-    // shows progress toward next boss every 1000m
-    const segment = BOSS_TRIGGER_DIST;
+    // แสดง progress ไปยัง boss raid ถัดไป (loop ทุก BOSS_RAID_INTERVAL m)
+    const segment = BOSS_RAID_INTERVAL;
     const pos     = this.distanceM % segment;
     const ratio   = pos / segment;
     const bx      = 6, by = 50, bw = WIDTH - 12, bh = 5;

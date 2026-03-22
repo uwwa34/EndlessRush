@@ -1,5 +1,17 @@
 // ═══════════════════════════════════════════════════
-//  Platform Manager
+//  js/world.js  —  Endless Rush
+//
+//  จัดการโลกและ platform ทั้งหมด
+//
+//  PlatformManager — spawn และ draw platforms
+//    - 3 ระดับความสูง (level 1/2/3)
+//    - resolvePlayer(): ตรวจ landing + walk-off
+//    - activePlatforms: getter สำหรับ items.js spawn coins
+//
+//  World — scroll, distance, background, ground
+//    - update(dt, speedMult): speedMult < 1 = slow motion
+//    - bossAlpha: 0–1, tint พื้นหลังตอน boss raid
+//    - bgImages.background: tile horizontally (parallax)
 // ═══════════════════════════════════════════════════
 class PlatformManager {
   constructor() {
@@ -48,12 +60,7 @@ class PlatformManager {
 
   _addPlatform(level, x) {
     const w = 180 + Math.random() * 120;
-    const yByLevel = {
-      1: GROUND_Y - 115,
-      2: GROUND_Y - 220,
-      3: GROUND_Y - 320,
-    };
-    const p = { x, y: yByLevel[level], w, h: 20, level, _coinsSpawned: false };
+    const p = { x, y: PLAT_Y[level], w, h: 20, level, _coinsSpawned: false };
     this.platforms.push(p);
     return p;
   }

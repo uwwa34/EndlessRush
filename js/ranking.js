@@ -1,5 +1,16 @@
 // ═══════════════════════════════════════════════════
-//  js/ranking.js  —  Endless Rush  (Yellow Pastel)
+//  js/ranking.js  —  Endless Rush
+//
+//  จัดการ 2 screen หลังจบเกม:
+//
+//  TallyScreen  — แสดงสรุปคะแนน (STATE.TALLY)
+//    - distance, coins, kills, max combo
+//    - กด Enter/Tap → ไป NAME entry
+//
+//  RankingScreen — กรอกชื่อและ leaderboard (STATE.NAME / STATE.RANKING)
+//    - NAME mode: กรอกชื่อ → กด Enter บันทึก
+//    - RANKING mode: แสดง top 10 → กด Enter เล่นใหม่
+//    - เก็บใน localStorage (RANKING_KEY, max RANKING_MAX entries)
 // ═══════════════════════════════════════════════════
 
 // ── Persistent storage ───────────────────────────────

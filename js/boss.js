@@ -1,6 +1,23 @@
 // ═══════════════════════════════════════════════════
-//  js/boss.js  —  Endless Rush  (Raid Mode)
+//  js/boss.js  —  Endless Rush  (Boss Raid)
 //
+//  Boss โฉบผ่านฉาก (fly-through) ทุก 400–700m
+//  ไม่มี STATE แยก — raid เกิดขณะ STATE.PLAYING ปกติ
+//
+//  RAID_STATE machine:
+//    IDLE     → WARNING (⚠️ บนจอ 2.5 วิ)
+//    WARNING  → INCOMING (boss บินผ่าน)
+//    INCOMING → DONE
+//    DONE     → IDLE (game.js reset)
+//
+//  API:
+//    raid.startRaid(bossData) — เริ่ม raid
+//    raid.update(dt)          — เรียกทุก frame
+//    raid.draw(ctx)           — เรียกทุก frame
+//    raid.checkBodyHit(p)     — ชนตัว boss
+//    raid.checkProjectileHit(p) — โดนกระสุน boss
+//    raid.isDone / isActive / isWarning — state flags
+// ═══════════════════════════════════════════════════
 //  Boss ไม่มี fight state แยก — โฉบผ่านระหว่าง PLAYING
 //  ทุก ~1000m boss บินมาจากขวา → ผ่านจอ → ออกซ้าย
 //  ก่อนมา 2.5s: warning + spawn platform ช่วย player

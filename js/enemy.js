@@ -1,5 +1,16 @@
 // ═══════════════════════════════════════════════════
 //  js/enemy.js  —  Endless Rush
+//
+//  จัดการศัตรูทั้งหมดในเกม
+//
+//  Enemy types (กำหนดใน settings.js ENEMY_TYPES):
+//    GROUND 🐢 — เดินบนพื้น, โดน stomp ตายได้
+//    AIR    🦅 — บินอยู่กลางอากาศ
+//    SPIKE  🌵 — อยู่นิ่ง, โดน stomp ไม่ตาย
+//
+//  EnemyManager.update(dt, worldSpeed, distanceM, frozen)
+//    frozen = true (FREEZE powerup): ศัตรูหยุด movement
+//    แต่ยัง scroll ตามโลก (worldSpeed * dt)
 // ═══════════════════════════════════════════════════
 
 class Enemy {
