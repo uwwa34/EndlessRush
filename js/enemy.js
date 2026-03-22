@@ -19,11 +19,12 @@ class Enemy {
     return { x: this.x+pad, y: this.y+pad, w: this.w-pad*2, h: this.h-pad*2 };
   }
 
-  update(dt, worldSpeed) {
-    this.x -= (worldSpeed + this.speed) * dt;
-    this._walkT += dt * 8;   // walk cycle speed
+  update(dt, worldSpeed, frozen = false) {
+    // frozen: หยุด self movement แต่ยัง scroll ตามโลก
+    this.x -= frozen ? worldSpeed * dt : (worldSpeed + this.speed) * dt;
+    this._walkT += frozen ? 0 : dt * 8;
 
-    if (this.airborne) {
+    if (!frozen && this.airborne) {
       this.y += Math.sin(Date.now() / 350) * 0.8;
     }
 
@@ -109,22 +110,23 @@ class EnemyManager {
     this._diffMult  = 1;
   }
 
-  update(dt, worldSpeed, distanceM) {
-    this._diffMult = 1 + distanceM / 2000;    // harder over time
+  update(dt, worldSpeed, distanceM, frozen = false) {
+    this._diffMult = 1 + distanceM / 2000;
     this._elapsed += dt * 1000;
 
-    // spawn check
-    this._spawnT += dt * 1000;
-    if (this._spawnT >= this._nextSpawn) {
-      this._spawnT   = 0;
-      const minG = Math.max(800,  this._minGap / this._diffMult);
-      const maxG = Math.max(1400, this._maxGap / this._diffMult);
-      this._nextSpawn = minG + Math.random() * (maxG - minG);
-      this._spawn(distanceM);
+    // spawn check (ไม่ spawn ใหม่ตอน freeze)
+    if (!frozen) {
+      this._spawnT += dt * 1000;
+      if (this._spawnT >= this._nextSpawn) {
+        this._spawnT   = 0;
+        const minG = Math.max(800,  this._minGap / this._diffMult);
+        const maxG = Math.max(1400, this._maxGap / this._diffMult);
+        this._nextSpawn = minG + Math.random() * (maxG - minG);
+        this._spawn(distanceM);
+      }
     }
 
-    // update all
-    for (const e of this.enemies) e.update(dt, worldSpeed);
+    for (const e of this.enemies) e.update(dt, worldSpeed, frozen);
     this.enemies = this.enemies.filter(e => e.alive);
   }
 

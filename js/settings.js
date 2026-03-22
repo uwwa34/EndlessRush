@@ -130,7 +130,7 @@ const _PU = {
   FREEZE      : { key:'freeze',      emoji:'❄️', label:'Freeze',     duration: POWERUP_DURATION_MS, sprite: null },
   GHOST       : { key:'ghost',       emoji:'👻', label:'Ghost',      duration: POWERUP_DURATION_MS, sprite: null },
   FLY         : { key:'fly',         emoji:'🪂', label:'Fly',        duration: POWERUP_DURATION_MS, sprite: null },
-  BOMB        : { key:'bomb',        emoji:'💣', label:'Bomb',       duration: 0,                   sprite: null },
+  BOMB        : { key:'bomb',        emoji:'💣', label:'Bomb',       duration: POWERUP_DURATION_MS, sprite: null },
   RAPID_FIRE  : { key:'rapid_fire',  emoji:'🔫', label:'Rapid Fire', duration: POWERUP_DURATION_MS, sprite: null },
   GIANT       : { key:'giant',       emoji:'🌀', label:'Giant',      duration: POWERUP_DURATION_MS, sprite: null },
 };

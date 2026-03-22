@@ -159,7 +159,11 @@ class BossRaid {
   // เช็ค boss body โดน player (โฉบชน)
   checkBodyHit(player) {
     if (this.state !== RAID_STATE.INCOMING) return false;
-    return _rectsOverlap(player.bounds, this.bounds);
+    if (!_rectsOverlap(player.bounds, this.bounds)) return false;
+    // boss ผ่าน player ไปแล้ว (ขอบขวาของ boss อยู่ซ้ายของ player center) → ไม่ damage
+    const playerCX = player.bounds.x + player.bounds.w / 2;
+    if (this.bounds.x + this.bounds.w < playerCX) return false;
+    return true;
   }
 
   get isActive() { return this.state === RAID_STATE.INCOMING; }

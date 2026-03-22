@@ -548,6 +548,9 @@ class Game {
     this.player.activePowerup = null;
     this.player.powerupTimer  = 0;
     this._rapidTimer          = 0;
+    this._bombTimer           = 0;
+    this._freezeTimer         = 0;
+    this._passedCooldown      = 0;
     this._lastSpeedMult       = 1;
     this.hud.reset();
     this._bossCount        = 0;
@@ -692,28 +695,6 @@ class Game {
     if (!def) return;
     this._sfx('start');
     this.hud.addScore(0, x, y - 20, `${def.emoji} ${def.label}!`);
-
-    if (key === 'bomb') {
-      // ระเบิดทันที — ล้างทุกอย่างบนจอ
-      let pts = 0, killCount = 0;
-      for (const e of this.enemies.enemies) {
-        if (!e.alive) continue;
-        e.alive = false;
-        pts += e.points;
-        killCount++;
-        this._spawnExplosion(e.x + e.w/2, e.y + e.h/2);
-      }
-      for (const b of this.boulders.boulders) {
-        if (!b.alive) continue;
-        b.alive = false;
-        pts += 150;
-        this._spawnExplosion(b.x, b.y);
-      }
-      this._enemyKills += killCount;
-      this._killScore  += pts;
-      this._sfx('boss_clear');
-      return;
-    }
     this.player.activatePowerup(key);
   }
 
@@ -760,13 +741,29 @@ class Game {
 
   _drawEffects(ctx) {
     for (const ef of this._effects) {
-      ctx.globalAlpha  = ef.life;
-      ctx.font         = `${ef.size}px serif`;
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(ef.emoji, ef.x, ef.y);
+      const alpha = ef.life / ef.maxLife;
+      ctx.globalAlpha = alpha;
+      if (ef._ring) {
+        // วงกลม AOE effect
+        const r = ef.size * (1 - alpha * 0.3);
+        ctx.beginPath();
+        ctx.arc(ef.x, ef.y, r, 0, Math.PI * 2);
+        ctx.strokeStyle = ef.emoji === '❄️' ? '#80DEEA' : '#FF6F00';
+        ctx.lineWidth   = 3 * alpha;
+        ctx.stroke();
+        ctx.fillStyle   = ef.emoji === '❄️'
+          ? `rgba(128,222,234,${alpha * 0.12})`
+          : `rgba(255,111,0,${alpha * 0.12})`;
+        ctx.fill();
+      } else {
+        ctx.font         = `${ef.size}px serif`;
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ef.emoji, ef.x, ef.y);
+      }
     }
     ctx.globalAlpha = 1;
+    ctx.lineWidth   = 1;
   }
 
   // ── Main Loop ────────────────────────────────────
@@ -900,8 +897,8 @@ class Game {
       this.world.bossAlpha = Math.max(0, this.world.bossAlpha - dt * 2);
     }
 
-    // update world (speed_boost = ช้าลง 0.5x)
-    const wSpeedMult = this.player.activePowerup === 'speed_boost' ? 0.5 : 1;
+    // update world (speed_boost = ช้าลง 30%)
+    const wSpeedMult = this.player.activePowerup === 'speed_boost' ? 0.3 : 1;
     this.world.update(dt, wSpeedMult);
 
     // ── resolve platform collision ─────────────────
@@ -921,10 +918,17 @@ class Game {
 
     this.player.update(dt);
 
-    const frozen = this.player.activePowerup === 'freeze';
+    // enemies/boulders ช้าลงด้วยตอน speed_boost + หยุดตอน freeze
+    const frozen     = this.player.activePowerup === 'freeze';
+    const enemySpeed = this.player.activePowerup === 'speed_boost'
+      ? this.world.speed * 0.3 : this.world.speed;
+    // freeze: ศัตรูหยุด movement แต่ scroll ตามฉาก, boulder ยังเลื่อนปกติ
+    this.enemies.update(dt, enemySpeed, this.world.distanceM, frozen);
     if (!frozen) {
-      this.enemies.update(dt, this.world.speed, this.world.distanceM);
-      this.boulders.update(dt, this.world.speed, this.world.distanceM);
+      this.boulders.update(dt, enemySpeed, this.world.distanceM);
+    } else {
+      // boulder scroll ตามฉากแต่ไม่เพิ่ม speed ตัวเอง
+      this.boulders.update(dt, this.world.speed * 0.3, this.world.distanceM);
     }
 
     // ── Boulder hit player ────────────────────────
@@ -956,7 +960,8 @@ class Game {
       }
     }
     this.items.update(dt, this.world.speed, this.world.distanceM,
-                      this.world.platforms.activePlatforms);
+                      this.world.platforms.activePlatforms,
+                      this.player.activePowerup === 'speed_boost');
 
     // update projectiles
     for (const p of this._projectiles) p.update(dt);
@@ -1018,33 +1023,84 @@ class Game {
       if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
     }
 
-    // ── Magnet: ดูด item เข้าหา player ──────────
-    if (this.player.activePowerup === 'magnet') {
-      const px = this.player.x + this.player.w/2;
-      const py = this.player.y + this.player.h/2;
+    // ── Magnet + FLY: ดูด item ───────────────────
+    if (this.player.activePowerup === 'magnet' || this.player.activePowerup === 'fly') {
+      const px     = this.player.x + this.player.w/2;
+      const py     = this.player.y + this.player.h/2;
+      const isFly  = this.player.activePowerup === 'fly';
+      const radius = isFly ? 320 : 160;   // fly รัศมี 2 เท่า
       for (const item of this.items.items) {
         if (!item.alive || item._isBossDrop) continue;
+        if (isFly && item.y > GROUND_Y - 40) continue;  // fly: ไม่ดูด item พื้น
         const ix = item.x + item.w/2, iy = item.y + item.h/2;
-        const dist = Math.hypot(px-ix, py-iy);
-        if (dist < 160) {
-          item.x += (px - ix) * dt * 5;
-          item.y += (py - iy) * dt * 5;
+        if (Math.hypot(px-ix, py-iy) < radius) {
+          item.x += (px - ix) * dt * 6;
+          item.y += (py - iy) * dt * 6;
         }
       }
     }
 
-    // ── Rapid Fire: ยิงอัตโนมัติ ─────────────────
+    // ── BOMB: AOE ระเบิดต่อเนื่องรัศมี 300px ────
+    if (this.player.activePowerup === 'bomb') {
+      const px = this.player.x + this.player.w/2;
+      const py = this.player.y + this.player.h/2;
+      this._bombTimer = (this._bombTimer || 0) + dt * 1000;
+      if (this._bombTimer >= 400) {
+        this._bombTimer = 0;
+        this._effects.push({ x:px, y:py, vx:0, vy:0, life:0.35, maxLife:0.35, emoji:'💥', size:300, _ring:true });
+        for (const e of this.enemies.enemies) {
+          if (!e.alive) continue;
+          const ex = e.x + e.w/2, ey = e.y + e.h/2;
+          if (Math.hypot(px-ex, py-ey) < 300) {
+            this.enemies.killEnemy(e);
+            this._enemyKills++;
+            const pts = e.points;
+            this._killScore += pts;
+            this.hud.addScore(0, e.x, e.y-10, `💥 +${pts}`);
+            this._spawnExplosion(ex, ey);
+          }
+        }
+        for (const b of this.boulders.boulders) {
+          if (!b.alive) continue;
+          if (Math.hypot(px-b.x, py-b.y) < 300) {
+            b.alive = false;
+            this._killScore += 150;
+            this._spawnExplosion(b.x, b.y);
+          }
+        }
+      }
+    } else { this._bombTimer = 0; }
+
+    // ── FREEZE: effect วงกลม + คะแนน ─────────────
+    // ศัตรูหยุด movement แต่ยัง scroll ตามฉาก (จัดการใน enemy update)
+    if (this.player.activePowerup === 'freeze') {
+      const px = this.player.x + this.player.w/2;
+      const py = this.player.y + this.player.h/2;
+      this._freezeTimer = (this._freezeTimer || 0) + dt * 1000;
+      if (this._freezeTimer >= 600) {
+        this._freezeTimer = 0;
+        this._effects.push({ x:px, y:py, vx:0, vy:0, life:0.5, maxLife:0.5, emoji:'❄️', size:150, _ring:true });
+        for (const e of this.enemies.enemies) {
+          if (!e.alive) continue;
+          if (Math.hypot(px - (e.x+e.w/2), py - (e.y+e.h/2)) < 150) {
+            const pts = Math.floor(e.points * 0.5);
+            this._killScore += pts;
+            this.hud.addScore(0, e.x, e.y-10, `❄️ +${pts}`);
+          }
+        }
+      }
+    } else { this._freezeTimer = 0; }
+
+    // ── Rapid Fire ─────────────────────────────────
     if (this.player.activePowerup === 'rapid_fire') {
       this._rapidTimer = (this._rapidTimer || 0) + dt * 1000;
       if (this._rapidTimer >= 300) {
         this._rapidTimer = 0;
         this._spawnProjectile();
       }
-    } else {
-      this._rapidTimer = 0;
-    }
+    } else { this._rapidTimer = 0; }
 
-    // ── Giant: ชนศัตรูและ boulder ดาเมจ ──────────
+    // ── Giant: ชนศัตรูและ boulder ──────────────────
     if (this.player.activePowerup === 'giant') {
       const pb = this.player.bounds;
       for (const e of this.enemies.enemies) {
@@ -1060,8 +1116,9 @@ class Game {
       }
       for (const b of this.boulders.boulders) {
         if (!b.alive) continue;
-        const nearX = Math.max(pb.x, Math.min(b.x, pb.x+pb.w));
-        const nearY = Math.max(pb.y, Math.min(b.y, pb.y+pb.h));
+        const pb2 = this.player.bounds;
+        const nearX = Math.max(pb2.x, Math.min(b.x, pb2.x+pb2.w));
+        const nearY = Math.max(pb2.y, Math.min(b.y, pb2.y+pb2.h));
         const dx = b.x-nearX, dy = b.y-nearY;
         if (dx*dx + dy*dy < b.r*b.r) {
           b.alive = false;
@@ -1072,19 +1129,27 @@ class Game {
     }
 
     // ── Enemy collision ────────────────────────────
+    // tick passed cooldown (ป้องกัน re-trigger ศัตรูผ่านไปแล้ว โดยไม่กระพริบ)
+    if (this._passedCooldown > 0) this._passedCooldown -= dt * 1000;
+
     const isImmune = this.player.activePowerup === 'ghost' ||
                      this.player.activePowerup === 'freeze' ||
                      this.player.activePowerup === 'giant';
     const hitEnemy = this.enemies.checkCollisions(this.player);
-    if (hitEnemy && !this.player.invincible && !isImmune) {
+    if (hitEnemy && !this.player.invincible && !isImmune && !(this._passedCooldown > 0)) {
       const pb = this.player.bounds;
       const eb = hitEnemy.bounds;
-      // ด้านท้าย (ขวา) = player center อยู่ทางขวาของ enemy center → ไม่ damage
-      const playerCX = pb.x + pb.w / 2;
-      const enemyCX  = eb.x + eb.w / 2;
-      const fromBehind = playerCX > enemyCX + eb.w * 0.25;
 
-      if (this.player.dashing) {
+      // ศัตรูผ่านเราไปแล้ว = ขอบขวาของศัตรูอยู่ซ้ายของ player center
+      // → ไม่ damage ไม่ว่าจะตกลงมาโดน หรือชนด้านไหนก็ตาม
+      const playerCX   = pb.x + pb.w / 2;
+      const enemyPassed = (eb.x + eb.w) < playerCX;
+
+      if (enemyPassed) {
+        // ศัตรูผ่านไปแล้ว — set cooldown เงียบๆ ไม่กระพริบ ไม่มี SFX
+        this._passedCooldown = (this._passedCooldown || 0);
+        this._passedCooldown = Math.max(this._passedCooldown, 300);
+      } else if (this.player.dashing) {
         this.enemies.killEnemy(hitEnemy);
         this._enemyKills++;
         this._comboCount++;
@@ -1096,7 +1161,6 @@ class Game {
         this._sfx('boss_hit');
         this._spawnExplosion(hitEnemy.x + hitEnemy.w/2, hitEnemy.y + hitEnemy.h/2);
       } else if (this._isStomping(hitEnemy)) {
-        // stomp จากบน = ฆ่าได้เสมอ ไม่ว่าจะด้านไหน
         this.enemies.killEnemy(hitEnemy);
         this._enemyKills++;
         this.player.stompBounce();
@@ -1108,13 +1172,6 @@ class Game {
         this._killScore += pts;
         this.hud.addScore(0, hitEnemy.x + hitEnemy.w/2, hitEnemy.y - 10, `👟 +${pts}`);
         this._spawnExplosion(hitEnemy.x + hitEnemy.w/2, hitEnemy.y + hitEnemy.h/2);
-      } else if (fromBehind) {
-        // ชนด้านท้าย = ไม่ damage, แค่ bounce เล็กน้อย
-        // (player วิ่งผ่านได้ = invincible ชั่วคราว 300ms)
-        if (!this.player.invincible) {
-          this.player._startInvincible();
-          this.player.invTimer = 300;
-        }
       } else {
         // ชนด้านหน้า → เสีย HP
         const died = this.player.hit();
@@ -1141,11 +1198,12 @@ class Game {
     const playerBottom = pb.y + pb.h;
     const enemyTop     = eb.y;
     const playerCX     = pb.x + pb.w / 2;
-    // ขยาย x zone เล็กน้อยให้ stomp ง่ายขึ้น (±8px จากขอบ enemy)
+    // stomp: player กำลังตก (vy > 0), bottom อยู่เหนือ/ใกล้ top ศัตรู
+    // ขยาย x zone ±16px ให้ stomp ง่ายขึ้น
     return this.player.vy > 0 &&
-           playerBottom <= enemyTop + 12 &&
-           playerCX > eb.x - 8 &&
-           playerCX < eb.x + eb.w + 8;
+           playerBottom <= enemyTop + 16 &&
+           playerCX > eb.x - 16 &&
+           playerCX < eb.x + eb.w + 16;
   }
 
   // ── Draw ─────────────────────────────────────────

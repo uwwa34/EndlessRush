@@ -341,9 +341,13 @@ class Player {
 
     ctx.save();
 
+    // ghost: กระพริบสลับโปร่งแสง
+    if (this.activePowerup === 'ghost') {
+      ctx.globalAlpha = Math.floor(Date.now() / 150) % 2 === 0 ? 0.25 : 0.8;
+    }
+
     // ── Dash trail + glow ─────────────────────────
     if (this.dashing) {
-      // afterimage trails
       const trailAlphas = [0.15, 0.25, 0.40];
       const trailOffsets = [-32, -20, -10];
       trailAlphas.forEach((a, i) => {
@@ -351,7 +355,10 @@ class Player {
         ctx.filter = 'hue-rotate(30deg) saturate(3)';
         this._drawBody(ctx, this.x + trailOffsets[i], this.y);
       });
-      ctx.globalAlpha = 1;
+      // restore ghost alpha หลัง dash trail (ไม่ reset เป็น 1 ถ้า ghost active)
+      ctx.globalAlpha = this.activePowerup === 'ghost'
+        ? (Math.floor(Date.now() / 150) % 2 === 0 ? 0.25 : 0.8)
+        : 1;
       ctx.filter = 'none';
 
       // glow ring
@@ -376,7 +383,7 @@ class Player {
     }
 
     // ── Player body ───────────────────────────────
-    ctx.globalAlpha = 1;
+    if (this.activePowerup !== 'ghost') ctx.globalAlpha = 1;
     ctx.filter = 'none';
     this._drawBody(ctx, this.x, this.y);
 

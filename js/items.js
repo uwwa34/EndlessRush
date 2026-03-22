@@ -122,12 +122,21 @@ class ItemManager {
     this._nextSpawn = 1200 + Math.random() * 1000;
   }
 
-  update(dt, worldSpeed, distanceM, platformList) {
+  update(dt, worldSpeed, distanceM, platformList, speedBoost = false) {
     this._spawnT += dt * 1000;
+    // speed_boost: spawn เหรียญถี่ขึ้น 3 เท่า
+    const spawnInterval = speedBoost
+      ? (800 + Math.random() * 1400) / 3
+      : (800 + Math.random() * 1400);
     if (this._spawnT >= this._nextSpawn) {
       this._spawnT    = 0;
-      this._nextSpawn = 800 + Math.random() * 1400;
-      this._spawn(distanceM);
+      this._nextSpawn = spawnInterval;
+      // speed_boost: spawn coin เป็น chain เสมอ
+      if (speedBoost) {
+        this._spawnCoinChain(distanceM);
+      } else {
+        this._spawn(distanceM);
+      }
     }
 
     // spawn coins บน platform ที่เพิ่งเข้ามา
@@ -148,6 +157,16 @@ class ItemManager {
 
     for (const item of this.items) item.update(dt, worldSpeed);
     this.items = this.items.filter(i => i.alive);
+  }
+
+  _spawnCoinChain(dist) {
+    const x = WIDTH + 20;
+    const heights = [GROUND_Y - 36, GROUND_Y - 80, GROUND_Y - 140];
+    const y = heights[Math.floor(Math.random() * heights.length)];
+    const count = 5 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < count; i++) {
+      this.items.push(new Item('COIN', x + i * 38, y));
+    }
   }
 
   _spawn(dist) {
