@@ -4,11 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0,
         user-scalable=no, viewport-fit=cover" />
-  <title>🏃 Endless Rush</title>
+
+  <title>Endless Rush</title>
+  <meta name="description" content="วิ่ง กระโดด ไปให้ไกลที่สุด! เกม endless runner บนมือถือ" />
+  <meta name="theme-color" content="#4CAF50" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="assets/images/player.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Endless Rush" />
+
+  <!-- Open Graph (share preview) -->
+  <meta property="og:title" content="Endless Rush" />
+  <meta property="og:description" content="วิ่ง กระโดด ไปให้ไกลที่สุด!" />
+  <meta property="og:type" content="website" />
+
+  <!-- Fonts — media=print trick โหลด async ไม่บล็อก render -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700&display=swap"
         rel="stylesheet" media="print" onload="this.media='all'">
+
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body {
@@ -37,7 +55,6 @@
       gap:14px; z-index:10;
     }
     .load-logo {
-      font-size:64px;
       width:80px; height:80px;
       display:flex; align-items:center; justify-content:center;
       animation:loadBounce 0.9s infinite ease-in-out;
@@ -76,12 +93,16 @@
 </head>
 <body>
 
+<!--
+  iOS Audio Unlock
+  iOS บล็อก audio จนกว่าจะมี user gesture
+  script นี้ดัก gesture ทุกชนิดและ unlock AudioContext ก่อน game โหลดเสร็จ
+  ต้องอยู่ก่อน script อื่นทั้งหมด
+-->
 <script>
-// iOS Audio Unlock — ต้องลงทะเบียนก่อน user gesture แรก
 (function(){
   var unlocked = false;
   function unlock() {
-    // ไม่ทำอะไรถ้า page ไม่ active
     if (document.hidden) return;
     if (!unlocked) {
       unlocked = true;
@@ -100,13 +121,11 @@
         window._game._unlockAudio();
       }
     }
-    // resume BGM เฉพาะตอน page visible เท่านั้น
     if (!document.hidden && window._bgmEl && window._bgmEl.paused) {
       window._bgmEl.play().catch(function(){});
     }
   }
-  var evs = ['touchstart','touchend','pointerdown','mousedown','click','keydown'];
-  evs.forEach(function(ev){
+  ['touchstart','touchend','pointerdown','mousedown','click','keydown'].forEach(function(ev){
     document.addEventListener(ev, unlock, {passive:true});
   });
 })();
@@ -116,7 +135,10 @@
   <canvas id="gameCanvas" width="390" height="720"></canvas>
   <div id="scanlines"></div>
   <div id="loading">
-    <div id="load-logo" class="load-logo"><img src="assets/images/player.png" alt="player"/></div>
+    <div id="load-logo" class="load-logo">
+      <img src="assets/images/player.png" alt="player"
+           onerror="this.style.display='none';this.parentNode.textContent='🏃'"/>
+    </div>
     <div class="load-title">ENDLESS RUSH</div>
     <div class="load-sub">วิ่ง · กระโดด · ไปให้ไกลที่สุด!</div>
     <div id="load-bar-bg"><div id="load-bar"></div></div>
@@ -124,6 +146,7 @@
   </div>
 </div>
 
+<!-- Game scripts — โหลดตามลำดับ dependency -->
 <script src="js/settings.js"></script>
 <script src="js/player.js"></script>
 <script src="js/world.js"></script>
@@ -136,96 +159,104 @@
 <script src="js/game.js"></script>
 
 <script>
-// ── Canvas scaling ─────────────────────────────────
+// ── Canvas Scaling ────────────────────────────────
+// ปรับขนาด #wrapper ให้พอดีหน้าจอ รักษา aspect ratio 390:720
 (function(){
-  var w=document.getElementById('wrapper');
-  function r(){
-    var s=Math.min(window.innerWidth/390,window.innerHeight/720);
-    w.style.transform='scale('+s+')';
-    w.style.left=((window.innerWidth-390*s)/2)+'px';
-    w.style.top=((window.innerHeight-720*s)/2)+'px';
+  var w = document.getElementById('wrapper');
+  function resize() {
+    var s = Math.min(window.innerWidth / 390, window.innerHeight / 720);
+    w.style.transform = 'scale(' + s + ')';
+    w.style.left = ((window.innerWidth  - 390*s) / 2) + 'px';
+    w.style.top  = ((window.innerHeight - 720*s) / 2) + 'px';
   }
-  window.addEventListener('resize',r); r();
+  window.addEventListener('resize', resize);
+  resize();
 })();
 
-// ── Loaders ────────────────────────────────────────
-function setBar(p,m){
-  document.getElementById('load-bar').style.width=p+'%';
-  if(m) document.getElementById('load-msg').textContent=m;
+// ── Asset Loaders ─────────────────────────────────
+function setBar(pct, msg) {
+  document.getElementById('load-bar').style.width = pct + '%';
+  if (msg) document.getElementById('load-msg').textContent = msg;
 }
-function loadImg(src){
-  return new Promise(function(res){
-    var i=new Image();
-    i.onload=function(){res(i);}; i.onerror=function(){res(null);};
-    i.src=src;
+
+/** โหลดรูปภาพ — resolve null ถ้า fail (game จะ fallback เป็น emoji) */
+function loadImg(src) {
+  return new Promise(function(resolve) {
+    var img = new Image();
+    img.onload  = function(){ resolve(img); };
+    img.onerror = function(){ resolve(null); };
+    img.src = src;
   });
 }
-function loadSnd(src, isBGM){
+
+/**
+ * โหลดเสียง
+ * BGM (isBGM=true)  → HTMLAudio element (loop ง่าย)
+ * SFX (isBGM=false) → fetch → ArrayBuffer → Web Audio API
+ *   เหตุผล: HTMLAudio.cloneNode ไม่ reliable บน iOS
+ *   fallback เป็น HTMLAudio ถ้า fetch fail (file:// protocol)
+ */
+function loadSnd(src, isBGM) {
   if (isBGM) {
-    // BGM ใช้ Audio element (loop ได้ง่าย)
-    return new Promise(function(res){
+    return new Promise(function(resolve) {
       var a = new Audio();
       a.preload = 'auto';
       a.src = src;
-      setTimeout(function(){ res(a); }, 100);
+      setTimeout(function(){ resolve(a); }, 100);
     });
   }
-  // SFX ใช้ fetch → ArrayBuffer → decode ผ่าน Web Audio API
-  // reliable กว่า cloneNode บน iOS มาก
   return fetch(src)
     .then(function(r){ return r.arrayBuffer(); })
-    .then(function(buf){
-      return { _sfxBuf: buf, _src: src };   // เก็บ buffer ไว้ decode ตอนเล่น
-    })
+    .then(function(buf){ return { _sfxBuf: buf, _src: src }; })
     .catch(function(){
-      // fallback: Audio element ถ้า fetch ไม่ได้
       var a = new Audio(); a.src = src; return a;
     });
 }
 
-// ── Boot ───────────────────────────────────────────
-(async function(){
+// ── Boot Sequence ─────────────────────────────────
+(async function boot() {
   try {
-    setBar(5,'เริ่มต้น...');
-    var canvas=document.getElementById('gameCanvas');
-    var game=new Game(canvas);
+    setBar(5, 'เริ่มต้น...');
+    var canvas = document.getElementById('gameCanvas');
+    var game   = new Game(canvas);
 
-    // โหลดรูป
-    setBar(15,'โหลดรูปภาพ...');
-    var ikeys=Object.keys(ASSET_IMAGES);
-    var ires=await Promise.all(ikeys.map(function(k){return loadImg(ASSET_IMAGES[k]);}));
-    var images={};
-    ikeys.forEach(function(k,i){if(ires[i])images[k]=ires[i];});
+    setBar(15, 'โหลดรูปภาพ...');
+    var ikeys = Object.keys(ASSET_IMAGES);
+    var iResults = await Promise.all(ikeys.map(function(k){ return loadImg(ASSET_IMAGES[k]); }));
+    var images = {};
+    ikeys.forEach(function(k, i){ if (iResults[i]) images[k] = iResults[i]; });
 
-    // โหลดเสียง — BGM ใช้ Audio element, SFX ใช้ Web Audio Buffer
-    setBar(50,'โหลดเสียง...');
-    var skeys=Object.keys(ASSET_SOUNDS);
-    var bgmKeys = ['bgm','boss'];   // BGM files
-    var sres=await Promise.all(skeys.map(function(k){
+    setBar(50, 'โหลดเสียง...');
+    var skeys   = Object.keys(ASSET_SOUNDS);
+    var bgmKeys = ['bgm', 'boss'];
+    var sResults = await Promise.all(skeys.map(function(k){
       return loadSnd(ASSET_SOUNDS[k], bgmKeys.indexOf(k) >= 0);
     }));
-    var sounds={};
-    skeys.forEach(function(k,i){if(sres[i])sounds[k]=sres[i];});
+    var sounds = {};
+    skeys.forEach(function(k, i){ if (sResults[i]) sounds[k] = sResults[i]; });
 
-    setBar(100,'พร้อมแล้ว! 🌟');
+    setBar(100, 'พร้อมแล้ว! 🌟');
     game.setImages(images);
     game.setSounds(sounds);
 
-    await new Promise(function(r){setTimeout(r,250);});
+    await new Promise(function(r){ setTimeout(r, 250); });
 
-    var ld=document.getElementById('loading');
-    ld.style.transition='opacity 0.3s';
-    ld.style.opacity='0';
-    setTimeout(function(){ld.style.display='none';},300);
+    var ld = document.getElementById('loading');
+    ld.style.transition = 'opacity 0.3s';
+    ld.style.opacity = '0';
+    setTimeout(function(){ ld.style.display = 'none'; }, 300);
 
     game.start();
 
-  } catch(err) {
-    // แสดง error บนหน้า loading เพื่อ debug ง่าย
-    document.getElementById('load-msg').style.color='#C84A00';
-    document.getElementById('load-msg').textContent='ERROR: '+err.message;
-    document.getElementById('load-bar').style.background='#E84A00';
-    console.error('[EndlessRush Boot Error]', err);
+  } catch (err) {
+    // Error boundary — แสดง error บน loading screen แทน silent crash
+    var msgEl = document.getElementById('load-msg');
+    var barEl = document.getElementById('load-bar');
+    msgEl.style.color     = '#C84A00';
+    msgEl.textContent     = 'เกิดข้อผิดพลาด: ' + (err.message || String(err));
+    barEl.style.background = '#E84A00';
+    barEl.style.width     = '100%';
+    console.error('[EndlessRush] Boot failed:', err);
   }
 })();
 </script>
