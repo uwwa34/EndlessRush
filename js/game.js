@@ -271,7 +271,6 @@ class Game {
     this._specialCount   = 0;
     this._maxCombo       = 1;
     this._comboCount     = 0;
-    this._comboTimer     = 0;
     this._killScore      = 0;
     this._enemyKills     = 0;
     this._projectiles = [];
@@ -575,7 +574,6 @@ class Game {
     this._specialCount     = 0;
     this._maxCombo         = 1;
     this._comboCount       = 0;
-    this._comboTimer       = 0;
     this._killScore        = 0;
     this._enemyKills       = 0;
 
@@ -1000,10 +998,7 @@ class Game {
           proj.alive = false;
           this.enemies.killEnemy(e);
           this._enemyKills++;
-          this._comboCount++;
-          this._comboTimer = COMBO_TIMEOUT_MS;
-          if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
-          const pts = (e.points + PROJ_DMG_NORMAL) * Math.max(1, this._comboCount);
+          const pts = e.points + PROJ_DMG_NORMAL;
           this._killScore += pts;
           this.hud.addScore(0, e.x + e.w/2, e.y - 10, `💥 +${pts}`);
           this._sfx('boss_hit');
@@ -1013,11 +1008,7 @@ class Game {
       }
     }
 
-    // combo timer
-    if (this._comboTimer > 0) {
-      this._comboTimer -= dt * 1000;
-      if (this._comboTimer <= 0) this._comboCount = 0;
-    }
+    // combo timer ถูกยกเลิก — reset เฉพาะตอนโดนตีเท่านั้น
 
     // item collection
     const collected = this.items.checkCollect(this.player);
@@ -1025,6 +1016,8 @@ class Game {
       this._sfx('coin');
       if (collected.typeKey === 'COIN') {
         this.hud.addCoin();
+        this._comboCount++;
+        if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
         const pts = collected.points * Math.max(1, this._comboCount);
         this._killScore += pts;
         this.hud.addScore(0, collected.x, collected.y - 10, `+${pts}`);
@@ -1033,7 +1026,7 @@ class Game {
         this.player.weaponCharge = WEAPON_CHARGE_MS;
         this.player.weaponReady  = true;
         this.player.specialGauge = 5;
-        const pts = ITEM_TYPES.STAR.points * Math.max(1, this._comboCount);
+        const pts = ITEM_TYPES.STAR.points;
         this._killScore += pts;
         this.hud.addScore(0, collected.x, collected.y - 10, `⭐ READY!`);
       }
@@ -1042,9 +1035,6 @@ class Game {
       if (collected.typeKey === 'POWERUP') {
         this._activatePowerup(collected._powerupKey, collected.x, collected.y);
       }
-      this._comboCount++;
-      this._comboTimer = COMBO_TIMEOUT_MS;
-      if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
     }
 
     // ── Magnet + FLY: ดูด item ───────────────────
@@ -1176,10 +1166,7 @@ class Game {
       } else if (this.player.dashing) {
         this.enemies.killEnemy(hitEnemy);
         this._enemyKills++;
-        this._comboCount++;
-        this._comboTimer = COMBO_TIMEOUT_MS;
-        if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
-        const pts = hitEnemy.points * Math.max(1, this._comboCount) + DASH_POINTS;
+        const pts = hitEnemy.points + DASH_POINTS;
         this._killScore += pts;
         this.hud.addScore(0, hitEnemy.x + hitEnemy.w/2, hitEnemy.y - 10, `💥 +${pts}`);
         this._sfx('boss_hit');
@@ -1189,10 +1176,7 @@ class Game {
         this._enemyKills++;
         this.player.stompBounce();
         this._sfx('coin');
-        this._comboCount++;
-        this._comboTimer = COMBO_TIMEOUT_MS;
-        if (this._comboCount > this._maxCombo) this._maxCombo = this._comboCount;
-        const pts = hitEnemy.points * Math.max(1, this._comboCount);
+        const pts = hitEnemy.points;
         this._killScore += pts;
         this.hud.addScore(0, hitEnemy.x + hitEnemy.w/2, hitEnemy.y - 10, `👟 +${pts}`);
         this._spawnExplosion(hitEnemy.x + hitEnemy.w/2, hitEnemy.y + hitEnemy.h/2);
