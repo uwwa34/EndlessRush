@@ -120,7 +120,7 @@ const ENEMY_TYPES = {
 // ── Power-up System ───────────────────────────────────
 // วิธีเปิด/ปิด powerup: แก้แค่ ACTIVE_POWERUPS บรรทัดเดียว
 // ตัวเลือก: 'SPEED_BOOST' | 'MAGNET' | 'FREEZE' | 'GHOST' | 'FLY' | 'BOMB' | 'RAPID_FIRE' | 'GIANT'
-const ACTIVE_POWERUPS = ['MAGNET'];  // ← แก้ที่นี่
+const ACTIVE_POWERUPS = ['GIANT'];  // ← แก้ที่นี่
 
 const POWERUP_DURATION_MS = 10000;
 
